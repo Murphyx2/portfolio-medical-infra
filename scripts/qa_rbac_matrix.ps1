@@ -1,5 +1,8 @@
 $ErrorActionPreference = "Stop"
 $base = "http://localhost:8000/api"
+# Unique suffix per run: centers use unique `code`, medicines use
+# unique_together(generic, commercial, concentration) - avoids 400 on reruns.
+$runId = Get-Random -Minimum 100000 -Maximum 999999
 
 function Call($method, $url, $body, $token) {
     $headers = @{ "Content-Type" = "application/json" }
@@ -44,10 +47,22 @@ $pat = Call "Post" "$base/patients/" $patBody $tokens["RECEPTIONIST"]
 Write-Output ("create patient -> {0}" -f $pat.status)
 $patId = $pat.data.id
 
-# ensure a center + medicine exist (admin) for appointment/record payloads
-$center = Call "Post" "$base/centers/" (Body @{ name="Central Clinic"; code="CC01"; address="Av. Principal 100" }) $tokens["ADMIN"]
-$med = Call "Post" "$base/medicines/" (Body @{ generic_name="Paracetamol"; commercial_name="Tylenol"; dosage="500mg"; unit="tablet" }) $tokens["ADMIN"]
+# ensure a center + medicine + doctor profile exist (admin) for appointment/record payloads
+$center = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $runId"; code="CC$runId"; address="Av. Principal 100"; phone="+1-555-2000" }) $tokens["ADMIN"]
+$med = Call "Post" "$base/medicines/" (Body @{ generic_name="Paracetamol"; commercial_name="Tylenol $runId"; concentration="500 mg" }) $tokens["ADMIN"]
 Write-Output ("ensure center -> {0}, medicine -> {1}" -f $center.status, $med.status)
+
+# doctor profile for the `doctor` user (fetch existing or create)
+$users = (Call "Get" "$base/auth/users/" $null $tokens["ADMIN"]).data.results
+$docUser = $users | Where-Object { $_.username -eq "doctor" } | Select-Object -First 1
+$profiles = (Call "Get" "$base/doctors/profiles/" $null $tokens["ADMIN"]).data.results
+$docProfile = $profiles | Where-Object { $_.user_id -eq $docUser.id } | Select-Object -First 1
+if (-not $docProfile) {
+    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-RBAC-1"; contact_phone="+1-555-3000" }) $tokens["ADMIN"]
+    $docProfile = $dp.data
+}
+$docProfileId = $docProfile.id
+Write-Output ("doctor profile id -> {0}" -f $docProfileId)
 
 $matrix = @(
     @{ role="ADMIN"; url="$base/patients/"; method="GET";    expected="200" },
@@ -78,9 +93,9 @@ $matrix = @(
 $payloads = @{
     "patients/" = @{ first_name="Test"; last_name="Case"; birth_date="1980-01-01"; gender="MALE"; phone="+1-555-0199"; email="tc@example.com" }
     "medical-records/" = @{ patient=$patId; title="QA record"; diagnosis="QA test"; treatment="none" }
-    "appointments/" = @{ patient=$patId; date_time="2026-09-01T10:00:00Z"; reason="QA appointment" }
-    "centers/" = @{ name="QA Center"; code="QAC02"; address="1 QA Rd" }
-    "medicines/" = @{ generic_name="ParaQA"; commercial_name="QAcol"; dosage="500mg"; unit="tablet" }
+    "appointments/" = @{ patient=$patId; doctor=$docProfileId; date_time="2026-09-01T10:00:00Z"; reason="QA appointment" }
+    "centers/" = @{ name="QA Center $runId"; code="QAC$runId"; address="1 QA Rd"; phone="+1-555-6000" }
+    "medicines/" = @{ generic_name="ParaQA-$runId"; commercial_name="QAcol"; concentration="500 mg" }
 }
 
 Write-Output "=== RBAC matrix ==="
@@ -93,6 +108,15 @@ foreach ($m in $matrix) {
     } else {
         $seg = ($m.url.TrimEnd("/") -split "/")[-1] + "/"
         $body = if ($payloads[$seg]) { Body $payloads[$seg] } else { "{}" }
+        # Distinct values per role so an earlier ADMIN POST (unique code /
+        # medicine) does not make the identical IT POST fail with 400.
+        if ($m.role -eq "IT") {
+            $p = @{}
+            foreach ($k in $payloads[$seg].Keys) { $p[$k] = $payloads[$seg][$k] }
+            if ($seg -eq "centers/") { $p.code = "QAC-IT-$runId"; $p.name = "QA Center IT $runId" }
+            if ($seg -eq "medicines/") { $p.generic_name = "ParaQA-IT-$runId" }
+            $body = Body $p
+        }
         $r = Call "Post" $m.url $body $tok
     }
     $match = ($r.status.ToString() -eq $m.expected) -or (($m.expected -eq "201") -and ($r.status -eq 200) -and $r.ok)
@@ -101,12 +125,35 @@ foreach ($m in $matrix) {
 }
 Write-Output ("RBAC matrix: {0} passed, {1} failed" -f $pass, $fail)
 
-Write-Output "=== PII redaction (IT vs DOCTOR) ==="
-$itPat = Call "Get" "$base/patients/$patId/" $null $tokens["IT"]
-$docPat = Call "Get" "$base/patients/$patId/" $null $tokens["DOCTOR"]
-Write-Output ("IT  phone={0} email={1}" -f $itPat.data.phone, $itPat.data.email)
-Write-Output ("DOC phone={0} email={1}" -f $docPat.data.phone, $docPat.data.email)
-Write-Output ("IT masked={0} DOCTOR full={1}" -f ($itPat.data.phone -match "•"), ($docPat.data.phone -eq "+1-555-0100"))
+Write-Output "=== PII masking by role (H-04) ==="
+# IT, RECEPTIONIST, CENTER_MANAGER -> masked; DOCTOR, NURSE, ADMIN -> full
+function Test-Masking($roleKey, $expectFull) {
+    $d = (Call "Get" "$base/patients/$patId/" $null $tokens[$roleKey]).data
+    $masked = ($d.phone -ne "+1-555-0100") -and ($d.email -ne "ana.perez@example.com") -and ($d.address -ne "123 Main St, Springfield")
+    $full = ($d.phone -eq "+1-555-0100") -and ($d.email -eq "ana.perez@example.com") -and ($d.address -eq "123 Main St, Springfield")
+    $ok = if ($expectFull) { $full } else { $masked }
+    Write-Output ("{0,-15} phone={1} email={2} => expect {3}: {4}" -f $roleKey, $d.phone, $d.email, $(if ($expectFull) { "FULL" } else { "MASKED" }), $(if ($ok) { "PASS" } else { "FAIL" }))
+    return $ok
+}
+$maskingPass = 0; $maskingFail = 0
+foreach ($t in @(
+    @{ role="IT"; full=$false }, @{ role="RECEPTIONIST"; full=$false }, @{ role="CENTER_MANAGER"; full=$false },
+    @{ role="DOCTOR"; full=$true }, @{ role="NURSE"; full=$true }, @{ role="ADMIN"; full=$true }
+)) {
+    if (Test-Masking $t.role $t.full) { $maskingPass++ } else { $maskingFail++ }
+}
+Write-Output ("PII masking: {0} passed, {1} failed" -f $maskingPass, $maskingFail)
+
+Write-Output "=== Schema / docs gating (M-01) ==="
+$schemaAnon = (Call "Get" "$base/schema/" $null $null).status
+$docsAnon = (Call "Get" "$base/docs/" $null $null).status
+$schemaAdm = (Call "Get" "$base/schema/" $null $tokens["ADMIN"]).status
+$docsAdm = (Call "Get" "$base/docs/" $null $tokens["ADMIN"]).status
+$schemaIt = (Call "Get" "$base/schema/" $null $tokens["IT"]).status
+$docsIt = (Call "Get" "$base/docs/" $null $tokens["IT"]).status
+Write-Output ("schema anon={0} (exp 401) docs anon={1} (exp 401) schema admin={2} (exp 200) docs admin={3} (exp 200) schema IT={4} (exp 200) docs IT={5} (exp 200)" -f $schemaAnon, $docsAnon, $schemaAdm, $docsAdm, $schemaIt, $docsIt)
+$schemaOk = ($schemaAnon -eq 401) -and ($docsAnon -eq 401) -and ($schemaAdm -eq 200) -and ($docsAdm -eq 200) -and ($schemaIt -eq 200) -and ($docsIt -eq 200)
+Write-Output ("schema/docs gating: {0}" -f $(if ($schemaOk) { "PASS" } else { "FAIL" }))
 
 Write-Output "=== JWT refresh rotation + blacklist ==="
 $lr = Login "admin" "AdminPass123!"
