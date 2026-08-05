@@ -112,6 +112,8 @@ Each app in `backend/apps/` is a candidate future microservice:
 - GitHub Actions in infra: `backend-ci.yml` (checks + pytest), `frontend-ci.yml` (type-check + build).
 - Full README quick-start for fresh clone of the 3 repos.
 - Verified: clean `docker compose down/up` boots all 4 services; image upload → `/media/...` serves 200; record lists the image.
+- Hotfix: frontend `AuthProvider` was never mounted → Login page crashed; wrapped app in `AuthProvider` in `main.tsx`.
+- Added Swagger/OpenAPI via `drf-spectacular`: `/api/docs/` (Swagger UI) + `/api/schema/` (29 paths, JWT auth) — public schema, docs at `/api/docs/`.
 
 ## Project complete — MVP delivered
 All 5 steps done. Backend (Django) 31 tests passing; frontend builds; stack runs via Docker Compose with PostgreSQL + Redis cache; patient PII encrypted at rest; RBAC + audit + throttling in place; CI/CD ready to activate on push.
