@@ -74,8 +74,11 @@ Each app in `backend/apps/` is a candidate future microservice:
 
 ## Progress Log
 
-### 2026-08-05 — Step 1: Scaffold & 3 repos (in progress)
+### 2026-08-05 — Step 1: Scaffold & 3 repos ✅
 - Created workspace folder structure (`infra/`, `backend/`, `frontend/`).
 - `git init` on `main` for all three repos.
-- Writing PROGRESS.md, README files, architecture doc, env template, gitignores.
-- Pending: initial commit per repo.
+- Wrote PROGRESS.md, README files, architecture doc, env template, gitignores.
+- Initial commit per repo: infra `ef6f899`, backend `7641151`, frontend `19bb1d8`.
+
+### 2026-08-05 — Step 2: Docker + project skeletons (in progress)
+- Pending: docker-compose (postgres/redis/backend/frontend), Django `config` + 7 apps, React+Vite+TS with palette theme + i18n.
