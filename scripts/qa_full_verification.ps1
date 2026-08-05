@@ -200,7 +200,7 @@ foreach ($m in $matrix) {
 Report "RBAC matrix total" ($fail -eq 0) ("{0} passed, {1} failed" -f $pass, $fail)
 
 # ---------------------------------------------------------------
-# PHASE B: PII masking (IT vs DOCTOR + CENTER_MANAGER)
+# PHASE B: PII masking (IT + CENTER_MANAGER masked; DOCTOR, NURSE, ADMIN, RECEPTIONIST full)
 # ---------------------------------------------------------------
 Write-Output "=== PHASE B: PII masking ==="
 $itPat = Call "Get" "$base/patients/$patId/" $null $tokens["IT"]
@@ -210,11 +210,11 @@ $recPat = Call "Get" "$base/patients/$patId/" $null $tokens["RECEPTIONIST"]
 $itMasked = ($itPat.data.phone -notmatch "\+1-555-0100") -and ($itPat.data.phone -ne "+1-555-0100") -and ($itPat.data.email -ne "ana.perez@example.com")
 $docFull = ($docPat.data.phone -eq "+1-555-0100") -and ($docPat.data.email -eq "ana.perez@example.com")
 $cmMasked = ($cmPat.data.phone -ne "+1-555-0100") -and ($cmPat.data.email -ne "ana.perez@example.com")
-$recMasked = ($recPat.data.phone -ne "+1-555-0100") -and ($recPat.data.email -ne "ana.perez@example.com")
+$recFull = ($recPat.data.phone -eq "+1-555-0100") -and ($recPat.data.email -eq "ana.perez@example.com")
 Report "PII: IT masked" $itMasked ("IT phone={0} email={1}" -f $itPat.data.phone, $itPat.data.email)
 Report "PII: doctor full" $docFull ("DOC phone={0} email={1}" -f $docPat.data.phone, $docPat.data.email)
 Report "PII: center_manager masked" $cmMasked ("CM phone={0} email={1}" -f $cmPat.data.phone, $cmPat.data.email)
-Report "PII: receptionist masked (per TEST_USERS.md)" $recMasked ("REC phone={0} email={1}" -f $recPat.data.phone, $recPat.data.email)
+Report "PII: receptionist full" $recFull ("REC phone={0} email={1}" -f $recPat.data.phone, $recPat.data.email)
 
 # ---------------------------------------------------------------
 # PHASE C: E2E smoke flow

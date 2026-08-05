@@ -126,21 +126,23 @@ foreach ($m in $matrix) {
 Write-Output ("RBAC matrix: {0} passed, {1} failed" -f $pass, $fail)
 
 Write-Output "=== PII masking by role (H-04) ==="
-# IT, RECEPTIONIST, CENTER_MANAGER -> masked; DOCTOR, NURSE, ADMIN -> full
+# IT, CENTER_MANAGER -> masked; DOCTOR, NURSE, ADMIN, RECEPTIONIST -> full
 function Test-Masking($roleKey, $expectFull) {
     $d = (Call "Get" "$base/patients/$patId/" $null $tokens[$roleKey]).data
     $masked = ($d.phone -ne "+1-555-0100") -and ($d.email -ne "ana.perez@example.com") -and ($d.address -ne "123 Main St, Springfield")
     $full = ($d.phone -eq "+1-555-0100") -and ($d.email -eq "ana.perez@example.com") -and ($d.address -eq "123 Main St, Springfield")
-    $ok = if ($expectFull) { $full } else { $masked }
-    Write-Output ("{0,-15} phone={1} email={2} => expect {3}: {4}" -f $roleKey, $d.phone, $d.email, $(if ($expectFull) { "FULL" } else { "MASKED" }), $(if ($ok) { "PASS" } else { "FAIL" }))
-    return $ok
+    if ($expectFull) { return $full }
+    return $masked
 }
 $maskingPass = 0; $maskingFail = 0
 foreach ($t in @(
-    @{ role="IT"; full=$false }, @{ role="RECEPTIONIST"; full=$false }, @{ role="CENTER_MANAGER"; full=$false },
-    @{ role="DOCTOR"; full=$true }, @{ role="NURSE"; full=$true }, @{ role="ADMIN"; full=$true }
+    @{ role="IT"; full=$false }, @{ role="CENTER_MANAGER"; full=$false },
+    @{ role="RECEPTIONIST"; full=$true }, @{ role="DOCTOR"; full=$true }, @{ role="NURSE"; full=$true }, @{ role="ADMIN"; full=$true }
 )) {
-    if (Test-Masking $t.role $t.full) { $maskingPass++ } else { $maskingFail++ }
+    $ok = Test-Masking $t.role $t.full
+    $d = (Call "Get" "$base/patients/$patId/" $null $tokens[$t.role]).data
+    Write-Output ("{0,-15} phone={1} email={2} => expect {3}: {4}" -f $t.role, $d.phone, $d.email, $(if ($t.full) { "FULL" } else { "MASKED" }), $(if ($ok) { "PASS" } else { "FAIL" }))
+    if ($ok) { $maskingPass++ } else { $maskingFail++ }
 }
 Write-Output ("PII masking: {0} passed, {1} failed" -f $maskingPass, $maskingFail)
 

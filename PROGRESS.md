@@ -138,7 +138,7 @@ Everything below was verified against the live stack. All three repos are clean 
 
 ### Runbook
 - Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.
-- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **64 passed**).
+- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **90 passed**).
 - Frontend build: `npm run build` (run from `frontend/`).
 - Swagger UI: http://localhost:8000/api/docs/ · OpenAPI schema: http://localhost:8000/api/schema/ · Health: http://localhost:8000/api/health/
 - App: http://localhost:5173 (login page) — Vite proxies `/api` and `/media` to the backend.
@@ -148,6 +148,7 @@ Everything below was verified against the live stack. All three repos are clean 
 - **Vite stale-cache on Docker bind-mount:** after changing frontend code or env, the container may keep serving old transformed modules. Root cause of the AuthProvider crash and the `ERR_NAME_NOT_RESOLVED` login bug. **Fix: recreate the container** — `docker compose up -d --force-recreate frontend` (or at least `up -d`), NOT plain `docker compose restart`.
 - **Proxy config:** browser must use the *relative* `/api` (so Vite proxies server-side). The server-side proxy target is `PROXY_TARGET=http://backend:8000/api` (compose). Do **not** set `VITE_API_BASE_URL` for dev — it bakes the Docker hostname into the client bundle.
 - **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it** — existing encrypted patient rows in Postgres become unreadable. Keep the same key across environments. The key **was rotated on 2026-08-05** (it had been committed in `settings/test.py`); to rotate again use `python manage.py reencrypt_pii --old-key <OLD_KEY>` (backend container) after updating the env, then recreate the backend.
+- **Login throttle race between smoke scripts:** the `login` throttle is 10/min per IP, and `qa_full_verification.ps1` deliberately fires ~11 rapid logins. Running the smoke scripts back-to-back within the same minute causes the next script's role logins to be 429-throttled (failures look like empty tokens / "bad_authorization_header"). **Wait ~70s between smoke script runs.**
 - **PowerShell 5.1** (Windows host): no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe` and `Invoke-RestMethod`.
 
 ### Environment
@@ -175,6 +176,15 @@ Driven by an independent security audit (subagent). Original Critical/High findi
 - **N-2** — doctor schedules validated like appointments (own profile + approved center only).
 - **L-03** — `CORS_ALLOW_CREDENTIALS=False`; **I-03** — encrypted email removed from patient search.
 - **Known remaining (accepted):** tokens in localStorage, unauthenticated `/media/` (UUID-obfuscated), Django admin exposes decrypted PII to `is_staff` (admin/IT), non-doctor roles see all centers (no user↔center model yet), prod TLS terminator not configured.
+
+## Feature pass (2026-08-05)
+Spanish-default i18n, ARS/insurance domain, receptionist PII access, and audit completion (verified: **90 pytest passed**, frontend builds, all three live smoke scripts green):
+- **Default language Spanish** — frontend defaults to `es` (persisted via `localStorage("mc_lang")`); backend `LANGUAGE_CODE = "es"` (DRF/SimpleJWT/admin messages now Spanish — tests assert on `code`/status, not English text).
+- **ARS domain** — new `backend/apps/ars`: `ARS` (unique `ars_id`, name) + `ARSProgram` (name, unique per ARS); seeded via data migration: **SEMMA** (`SM`, program "P Y P SEMMA") and **SENASA** (`SE`, program "SENASA Contigo"). API `api/ars/` (read: any staff; write: ADMIN/RECEPTIONIST only) with writable nested `programs` (0..n, reconciled on save). Frontend `/ars` page (ADMIN/RECEPTIONIST) with inline program editor.
+- **Patient insurance fields** — patients gain `cedula` (`000-0000000-0` format, encrypted), `nss` (digits only, encrypted), `ars` FK, `ars_program` FK (validated to belong to the patient's ARS). All optional. Frontend patient form + columns updated.
+- **Receptionist PII** — receptionists now see/edit full patient PII (phone/address/email/cedula/nss). Masking (redacted `••`) now applies only to **IT** and **CENTER_MANAGER**. Existing masking tests + `qa_rbac_matrix.ps1` + `qa_full_verification.ps1` updated to match.
+- **Audit completion** — `AuditLog.Action` now declares `LOGOUT`; `UserViewSet` audits user CRUD; CREATE audit restored for medical records / consultation logs / record images / appointments (their `perform_create` overrides had bypassed `AuditMixin`); `AuditLog` registered in Django admin (read-only).
+- **QA fixes** — program `id` made writable in `ARSSerializer` (PATCH reconcile no longer 500s); fixed `Test-Masking` counting bug in `qa_rbac_matrix.ps1` (function emitted two pipeline outputs so the check was always truthy).
 
 ## Suggested Next Steps (prioritized)
 1. **Security follow-ups (from the accepted-risk list):** move JWT refresh to an httpOnly `Secure` cookie flow (H-05); add an authenticated/signed-URL media endpoint (M-02); scope non-doctor staff reads by center (requires a user↔center model); add a TLS terminator to `docker-compose.prod.yml`.
