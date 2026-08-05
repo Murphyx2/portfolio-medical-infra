@@ -80,5 +80,20 @@ Each app in `backend/apps/` is a candidate future microservice:
 - Wrote PROGRESS.md, README files, architecture doc, env template, gitignores.
 - Initial commit per repo: infra `ef6f899`, backend `7641151`, frontend `19bb1d8`.
 
-### 2026-08-05 — Step 2: Docker + project skeletons (in progress)
-- Pending: docker-compose (postgres/redis/backend/frontend), Django `config` + 7 apps, React+Vite+TS with palette theme + i18n.
+### 2026-08-05 — Step 2: Docker + project skeletons ✅
+- `docker-compose.yml`: db (postgres:16), cache (redis:7), backend (Django runserver), frontend (Vite dev) — all 4 containers healthy.
+- Django `config/` with settings split `base/dev/prod`; 7 apps created under `apps/`.
+- Custom `accounts.User` (roles Admin, Doctor, Receptionist, IT, Nurse, Center Manager) + migration.
+- Frontend: Vite+React+TS with palette theme tokens, i18n (en/es), API client, Dockerfile(s), nginx.conf. `npm run build` passes.
+- Verified: `docker compose up` boots; `/admin/` responds; Vite serves 200.
+- Commits: infra `096a054`, backend `39f1fd8`, frontend `cbf7e4f`.
+
+### 2026-08-05 — Step 3: Backend MVP ✅
+- Models for all apps: User+roles, MedicalCenter, DoctorCenterBinding (admin-approved), DoctorProfile, DoctorSchedule, Patient (PII encrypted), MedicalRecord + ConsultationLog + RecordImage, Medicine, Appointment.
+- JWT auth (login/refresh/me), user management (Admin/IT), RBAC permission classes per role.
+- Field-level PII encryption (Fernet, `apps/core/fields.py`) verified at rest in Postgres.
+- Audit log app (`AuditLog` + `AuditMixin`), DRF throttling (incl. login), hardened prod settings.
+- Redaction: IT sees masked patient PII; receptionist/IT see masked clinical record content.
+- `create_admin` management command for reproducible setup.
+- Tests: 31 passed (auth, roles, CRUD, permission matrix, encryption-at-rest, redaction).
+- Verified end-to-end via live stack: login → center → doctor → patient → medicine → appointment → record → consultation log; PII ciphertext confirmed in Postgres.
