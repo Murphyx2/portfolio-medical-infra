@@ -58,6 +58,8 @@ services:
     build: ../frontend
     container_name: mc_frontend
     restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://backend:8000/api
     volumes:
       - ../frontend:/app
       - /app/node_modules

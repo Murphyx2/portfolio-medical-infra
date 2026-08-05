@@ -97,3 +97,10 @@ Each app in `backend/apps/` is a candidate future microservice:
 - `create_admin` management command for reproducible setup.
 - Tests: 31 passed (auth, roles, CRUD, permission matrix, encryption-at-rest, redaction).
 - Verified end-to-end via live stack: login → center → doctor → patient → medicine → appointment → record → consultation log; PII ciphertext confirmed in Postgres.
+
+### 2026-08-05 — Step 4: Frontend MVP ✅
+- Auth flow: login (JWT), token refresh, protected routes, role-aware navigation.
+- Pages: Dashboard, Patients, Doctors, Centers, Medicines, Users (Admin/IT), Appointments (create + cancel/complete), Medical Records (create, detail, image upload, consultation logs).
+- i18n EN default + ES (react-i18next), language switcher; palette theming across the app.
+- API client with automatic token refresh and retry; multipart upload for record images.
+- Verified: `npm run build` passes; Vite dev proxy (`/api`, `/media`) reaches backend container; login + `/api/auth/me` work through the proxy.
