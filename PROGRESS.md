@@ -104,3 +104,14 @@ Each app in `backend/apps/` is a candidate future microservice:
 - i18n EN default + ES (react-i18next), language switcher; palette theming across the app.
 - API client with automatic token refresh and retry; multipart upload for record images.
 - Verified: `npm run build` passes; Vite dev proxy (`/api`, `/media`) reaches backend container; login + `/api/auth/me` work through the proxy.
+
+### 2026-08-05 — Step 5: Security review + CI/CD ✅
+- JWT token blacklist enabled (rotation blacklists old refresh tokens); frontend persists rotated refresh tokens.
+- Record image upload validation (size ≤ 5 MB, image extensions only); Admin allowed to upload.
+- Django `check --deploy` passes (only warning from intentionally short test key).
+- GitHub Actions in infra: `backend-ci.yml` (checks + pytest), `frontend-ci.yml` (type-check + build).
+- Full README quick-start for fresh clone of the 3 repos.
+- Verified: clean `docker compose down/up` boots all 4 services; image upload → `/media/...` serves 200; record lists the image.
+
+## Project complete — MVP delivered
+All 5 steps done. Backend (Django) 31 tests passing; frontend builds; stack runs via Docker Compose with PostgreSQL + Redis cache; patient PII encrypted at rest; RBAC + audit + throttling in place; CI/CD ready to activate on push.
