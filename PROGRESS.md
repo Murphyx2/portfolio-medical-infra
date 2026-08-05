@@ -78,7 +78,7 @@ Each app in `backend/apps/` is a candidate future microservice:
 - Created workspace folder structure (`infra/`, `backend/`, `frontend/`).
 - `git init` on `main` for all three repos.
 - Wrote PROGRESS.md, README files, architecture doc, env template, gitignores.
-- Initial commit per repo: infra `ef6f899`, backend `7641151`, frontend `19bb1d8`.
+- Initial commit per repo (amended): infra `d1084e4`, backend `902768b`, frontend `82c493a`.
 
 ### 2026-08-05 — Step 2: Docker + project skeletons ✅
 - `docker-compose.yml`: db (postgres:16), cache (redis:7), backend (Django runserver), frontend (Vite dev) — all 4 containers healthy.
@@ -97,6 +97,7 @@ Each app in `backend/apps/` is a candidate future microservice:
 - `create_admin` management command for reproducible setup.
 - Tests: 31 passed (auth, roles, CRUD, permission matrix, encryption-at-rest, redaction).
 - Verified end-to-end via live stack: login → center → doctor → patient → medicine → appointment → record → consultation log; PII ciphertext confirmed in Postgres.
+- Commits: backend `40f0f5a` (MVP), `51bc6a4` (token blacklist + image validation), `3f76b4f` (admin image upload); infra `0325a37` (PII key env template).
 
 ### 2026-08-05 — Step 4: Frontend MVP ✅
 - Auth flow: login (JWT), token refresh, protected routes, role-aware navigation.
@@ -104,6 +105,7 @@ Each app in `backend/apps/` is a candidate future microservice:
 - i18n EN default + ES (react-i18next), language switcher; palette theming across the app.
 - API client with automatic token refresh and retry; multipart upload for record images.
 - Verified: `npm run build` passes; Vite dev proxy (`/api`, `/media`) reaches backend container; login + `/api/auth/me` work through the proxy.
+- Commits: frontend `ae7e889` (MVP), `33c93a3` (rotate-refresh persistence); infra `4263b7b` (compose frontend env + progress).
 
 ### 2026-08-05 — Step 5: Security review + CI/CD ✅
 - JWT token blacklist enabled (rotation blacklists old refresh tokens); frontend persists rotated refresh tokens.
@@ -116,6 +118,50 @@ Each app in `backend/apps/` is a candidate future microservice:
 - Added Swagger/OpenAPI via `drf-spectacular`: `/api/docs/` (Swagger UI) + `/api/schema/` (29 paths, JWT auth) — public schema, docs at `/api/docs/`.
 - Fixed login `ERR_NAME_NOT_RESOLVED`: dev browser now uses relative `/api` via Vite proxy; proxy target moved to server-side `PROXY_TARGET` env (`http://backend:8000/api`), `VITE_API_BASE_URL` no longer baked into the client bundle.
 - Added `TEST_USERS.md` with a working account per role (admin, doctor, receptionist, nurse, it, cm) — all verified logging in.
+- Commits: infra `8b3e453` (CI + README), `49ef3d9` (progress finalize), `9301d30` (AuthProvider/Swagger notes), `407445f` (PROXY_TARGET + TEST_USERS), `37931ae` (handoff docs); backend `5445a85` (Swagger/OpenAPI); frontend `b4610b0` (AuthProvider), `0e65a83` (proxy fix).
 
 ## Project complete — MVP delivered
 All 5 steps done. Backend (Django) 31 tests passing; frontend builds; stack runs via Docker Compose with PostgreSQL + Redis cache; patient PII encrypted at rest; RBAC + audit + throttling in place; CI/CD ready to activate on push.
+
+---
+
+## Current Handoff State (2026-08-05)
+
+Everything below was verified against the live stack. All three repos are clean (`git status` empty).
+
+### Repos & latest commits
+| Repo       | Path                                                                                            | Latest commit |
+|------------|-------------------------------------------------------------------------------------------------|---------------|
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `37931ae`     |
+| backend    | `backend/` (Django API)                                                                         | `5445a85`     |
+| frontend   | `frontend/` (React SPA)                                                                         | `0e65a83`     |
+
+### Runbook
+- Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.
+- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **31 passed**).
+- Frontend build: `npm run build` (run from `frontend/`).
+- Swagger UI: http://localhost:8000/api/docs/ · OpenAPI schema: http://localhost:8000/api/schema/ · Health: http://localhost:8000/api/health/
+- App: http://localhost:5173 (login page) — Vite proxies `/api` and `/media` to the backend.
+- Live QA smoke scripts (run from host): `.\scripts\qa_rbac_matrix.ps1` and `.\scripts\qa_integration_smoke.ps1` (PowerShell 5.1; they hit http://localhost:8000 directly and print a PASS/FAIL report).
+
+### Known pitfalls (IMPORTANT for any continuation agent)
+- **Vite stale-cache on Docker bind-mount:** after changing frontend code or env, the container may keep serving old transformed modules. Root cause of the AuthProvider crash and the `ERR_NAME_NOT_RESOLVED` login bug. **Fix: recreate the container** — `docker compose up -d --force-recreate frontend` (or at least `up -d`), NOT plain `docker compose restart`.
+- **Proxy config:** browser must use the *relative* `/api` (so Vite proxies server-side). The server-side proxy target is `PROXY_TARGET=http://backend:8000/api` (compose). Do **not** set `VITE_API_BASE_URL` for dev — it bakes the Docker hostname into the client bundle.
+- **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it** — existing encrypted patient rows in Postgres become unreadable. Keep the same key across environments.
+- **PowerShell 5.1** (Windows host): no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe` and `Invoke-RestMethod`.
+
+### Environment
+- Windows host · Python 3.13.3 · Node 22.14.0 · Docker 29.6.1 + Compose v5.3.0 · git 2.45.1.
+- Backend venv at `backend\.venv`; deps in `backend/requirements/{base,dev,prod}.txt`.
+- Dev data: seed admin `admin` / `AdminPass123!`. Per-role test credentials: **`infra/TEST_USERS.md`** (all six roles verified logging in).
+
+### QA subagent (opencode)
+- Global agent file: `~/.config/opencode/agent/qa.md` (mode: subagent). Use it for independent QA runs, e.g. `subagent_type: "qa"`, prompt "run QA on the app". Requires an opencode restart to load (it was created after the last start).
+- The agent is empowered to write/update automated tests but must NOT modify application code — it reports bugs for the main agent to fix.
+
+## Suggested Next Steps (prioritized)
+1. **Activate CI:** push the three repos to GitHub (workflows in `infra/.github/workflows/` reference sibling repos `medicalconsultations-backend` / `medicalconsultations-frontend` under the same owner).
+2. **Frontend test suite:** add vitest + React Testing Library (declared in decisions, still absent).
+3. **Async layer:** add Celery on the existing Redis (appointment reminders/notifications, image processing).
+4. **Doctor↔center approval UI:** surface the `DoctorCenterBinding` approve/pending flow in the frontend.
+5. **Seed/demo data:** add a management command that loads sample centers, doctors, patients, medicines, appointments for a populated first run.
