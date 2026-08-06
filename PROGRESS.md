@@ -1,6 +1,7 @@
 # MedicalConsultations — Project Progress
 
 > Living document: original specification, design decisions, and a running log of progress.
+> Read **Current State** (near the end) for the authoritative snapshot; the **Progress Log** above it is chronological history.
 
 ## Overview
 
@@ -23,7 +24,7 @@ is handled under international security standards.
 - **Admin** — full system administration, grants access, manages centers/roles
 - **Doctor** — manages their schedule, patients, medical records, appointments
 - **Receptionist** — manages appointments, patient records intake
-- **IT** — system maintenance, infrastructure
+- **IT** — system maintenance, infrastructure (**no Django admin** — revoked in audit #2)
 - **Nurse** — supports patient care (assists with records/logs)
 - **Center Manager** — manages a specific medical center's operations
 
@@ -32,8 +33,12 @@ is handled under international security standards.
 1. **Doctors** — full name, contact information, specialty, license, optional presence
    schedule per center. A doctor is bound to **zero or more** medical centers.
 2. **Patients** — address, contact information, optional email, medical records
-   (doctor-written), optional images, current treatment / medicine / doses, and a
-   consultation log per visit.
+   (doctor-written), optional images, current treatment / medicine / doses, a
+   consultation log per visit, plus insurance fields (`cedula` 11-digit, `nss`,
+   `ars`/`ars_program`) and a nullable `center` FK (**centerless = unbound = visible
+   to all staff**; center-bound patients are scoped to that center's doctors).
+   Names/birth-date encrypted at rest with a plaintext lowercase `search_name` index
+   for search.
 3. **Medicines** — generic (medical) term, commercial name, concentration.
 4. **Appointments** — created by a doctor or a receptionist for a patient.
 
@@ -46,11 +51,11 @@ is handled under international security standards.
 | Database             | PostgreSQL 16                                                       |
 | Cache / message      | Redis 7 (cache; later Celery broker)                                |
 | Auth                 | JWT tokens (djangorestframework-simplejwt)                          |
-| API language         | English default + Spanish (i18n-ready, react-i18next)               |
+| API language         | **Spanish default** + English (i18n, react-i18next)                 |
 | Architecture         | Modular monolith now, microservice-ready                            |
 | Deployment           | Docker Compose on a laptop, portable to CI/CD                       |
-| Tests                | pytest (backend), vitest/RTL (frontend, later)                      |
-| Security             | RBAC, field-level PII encryption, audit log, rate limiting, HTTPS   |
+| Tests                | pytest (backend), vitest + React Testing Library (frontend)         |
+| Security             | RBAC, field-level PII encryption, audit log, rate limiting, token-guarded media, HTTPS |
 
 ### Why PostgreSQL + Redis
 
@@ -68,11 +73,11 @@ MedicalConsultations/
 ```
 
 Each app in `backend/apps/` is a candidate future microservice:
-`accounts, centers, doctors, patients, records, medicines, appointments`.
+`accounts, ars, centers, doctors, patients, records, medicines, appointments`.
 
 ---
 
-## Progress Log
+## Progress Log (chronological)
 
 ### 2026-08-05 — Step 1: Scaffold & 3 repos ✅
 - Created workspace folder structure (`infra/`, `backend/`, `frontend/`).
@@ -93,7 +98,7 @@ Each app in `backend/apps/` is a candidate future microservice:
 - JWT auth (login/refresh/me), user management (Admin/IT), RBAC permission classes per role.
 - Field-level PII encryption (Fernet, `apps/core/fields.py`) verified at rest in Postgres.
 - Audit log app (`AuditLog` + `AuditMixin`), DRF throttling (incl. login), hardened prod settings.
-- Redaction: IT sees masked patient PII; receptionist/IT see masked clinical record content.
+- Redaction (initial): IT sees masked patient PII; receptionist/IT see masked clinical record content. *(Later changed — see Feature pass.)*
 - `create_admin` management command for reproducible setup.
 - Tests: 31 passed (auth, roles, CRUD, permission matrix, encryption-at-rest, redaction).
 - Verified end-to-end via live stack: login → center → doctor → patient → medicine → appointment → record → consultation log; PII ciphertext confirmed in Postgres.
@@ -102,7 +107,7 @@ Each app in `backend/apps/` is a candidate future microservice:
 ### 2026-08-05 — Step 4: Frontend MVP ✅
 - Auth flow: login (JWT), token refresh, protected routes, role-aware navigation.
 - Pages: Dashboard, Patients, Doctors, Centers, Medicines, Users (Admin/IT), Appointments (create + cancel/complete), Medical Records (create, detail, image upload, consultation logs).
-- i18n EN default + ES (react-i18next), language switcher; palette theming across the app.
+- i18n EN default + ES (react-i18next), language switcher; palette theming across the app. *(Default later flipped to Spanish — see Feature pass.)*
 - API client with automatic token refresh and retry; multipart upload for record images.
 - Verified: `npm run build` passes; Vite dev proxy (`/api`, `/media`) reaches backend container; login + `/api/auth/me` work through the proxy.
 - Commits: frontend `ae7e889` (MVP), `33c93a3` (rotate-refresh persistence); infra `4263b7b` (compose frontend env + progress).
@@ -113,26 +118,71 @@ Each app in `backend/apps/` is a candidate future microservice:
 - Django `check --deploy` passes (only warning from intentionally short test key).
 - GitHub Actions in infra: `backend-ci.yml` (checks + pytest), `frontend-ci.yml` (type-check + build).
 - Full README quick-start for fresh clone of the 3 repos.
-- Verified: clean `docker compose down/up` boots all 4 services; image upload → `/media/...` serves 200; record lists the image.
+- Verified: clean `docker compose down/up` boots all 4 services; image upload → `/media/...` serves 200; record lists the image. *(Media later made token-guarded — see audit #2.)*
 - Hotfix: frontend `AuthProvider` was never mounted → Login page crashed; wrapped app in `AuthProvider` in `main.tsx`.
-- Added Swagger/OpenAPI via `drf-spectacular`: `/api/docs/` (Swagger UI) + `/api/schema/` (29 paths, JWT auth) — public schema, docs at `/api/docs/`.
+- Added Swagger/OpenAPI via `drf-spectacular`: `/api/docs/` (Swagger UI) + `/api/schema/` (29 paths, JWT auth) — public at the time, later gated to Admin/IT (see audit #1).
 - Fixed login `ERR_NAME_NOT_RESOLVED`: dev browser now uses relative `/api` via Vite proxy; proxy target moved to server-side `PROXY_TARGET` env (`http://backend:8000/api`), `VITE_API_BASE_URL` no longer baked into the client bundle.
 - Added `TEST_USERS.md` with a working account per role (admin, doctor, receptionist, nurse, it, cm) — all verified logging in.
 - Commits: infra `8b3e453` (CI + README), `49ef3d9` (progress finalize), `9301d30` (AuthProvider/Swagger notes), `407445f` (PROXY_TARGET + TEST_USERS), `37931ae` (handoff docs); backend `5445a85` (Swagger/OpenAPI); frontend `b4610b0` (AuthProvider), `0e65a83` (proxy fix).
 
-## Project complete — MVP delivered
-All 5 steps done. Backend (Django) 31 tests passing; frontend builds; stack runs via Docker Compose with PostgreSQL + Redis cache; patient PII encrypted at rest; RBAC + audit + throttling in place; CI/CD ready to activate on push.
+### 2026-08-05 — Milestone: MVP complete ✅
+All 5 steps done. Backend (Django) 31 tests passing at this point; frontend builds; stack runs via Docker Compose with PostgreSQL + Redis cache; patient PII encrypted at rest; RBAC + audit + throttling in place; CI/CD ready to activate on push. *(Test count is now 118 — see Current State.)*
+
+### 2026-08-05 — Security audit #1 (original security pass)
+Driven by an independent security audit (subagent). Original Critical/High findings closed; verified live + by 33 new regression tests. Commits: backend `256c474`, frontend `523dbb2`, infra `d9cea85`.
+- **C-01** — real `DJANGO_SECRET_KEY` (in gitignored `.env`); `prod.py` now fails fast on placeholder/short keys, empty `ALLOWED_HOSTS`, or missing `PII_FIELD_KEY`.
+- **H-01** — new `docker-compose.prod.yml` (gunicorn, `config.settings.prod`, `DJANGO_DEBUG=false`, built images, no bind mounts, Redis `requirepass`, loopback-only DB); `frontend/Dockerfile.prod` + hardened `nginx.conf` (CSP, HSTS, nosniff, X-Frame-Options, `/media/` served from a shared volume — later replaced by token-guarded proxy, see audit #2); `backend/.dockerignore` excludes `.env`.
+- **H-02** — `POST /api/auth/logout/` blacklists the refresh token; frontend calls it on logout.
+- **H-03** — center-scoped querysets + write-side checks: doctors restricted to their own appointments/schedules and cannot attach unapproved centers.
+- **H-04** — PII masking applied to IT, receptionist, and center_manager (full PII only for admin/doctor/nurse). *(Later relaxed for receptionist — see Feature pass.)*
+- **H-05 (partial)** — strict CSP + security headers at the prod edge; tokens still in `localStorage` (httpOnly-cookie migration is a follow-up).
+- **M-01** — `/api/schema/` + `/api/docs/` now require Admin/IT (anonymous 401).
+- **M-03** — image uploads validate real image content (Pillow `verify`) and use randomized UUID filenames.
+- **M-04** — dev compose binds PostgreSQL/Redis to `127.0.0.1`; prod Redis uses a password.
+- **M-05** — PII decryption fails closed (never returns raw ciphertext); empty/None handled in the field converters.
+- **N-1 (rotation)** — the Fernet PII key that had been committed in `settings/test.py` was rotated; `test.py` now generates an ephemeral key per run; `reencrypt_pii` management command re-encrypted 113 existing rows.
+- **N-2** — doctor schedules validated like appointments (own profile + approved center only).
+- **L-03** — `CORS_ALLOW_CREDENTIALS=False`; **I-03** — encrypted email removed from patient search.
+
+### 2026-08-05 — Feature pass
+Spanish-default i18n, ARS/insurance domain, receptionist PII access, and audit completion (verified: **90 pytest passed** at this point, frontend builds, all three live smoke scripts green). Commits: backend `3cf47ee`, frontend `6de4183`, infra `777e233`.
+- **Default language Spanish** — frontend defaults to `es` (persisted via `localStorage("mc_lang")`); backend `LANGUAGE_CODE = "es"` (DRF/SimpleJWT/admin messages now Spanish — tests assert on `code`/status, not English text).
+- **ARS domain** — new `backend/apps/ars`: `ARS` (unique `ars_id`, name) + `ARSProgram` (name, unique per ARS); seeded via data migration: **SEMMA** (`SM`, program "P Y P SEMMA") and **SENASA** (`SE`, program "SENASA Contigo"). API `api/ars/` (read: any staff; write: ADMIN/RECEPTIONIST only) with writable nested `programs` (0..n, reconciled on save). Frontend `/ars` page (ADMIN/RECEPTIONIST) with inline program editor.
+- **Patient insurance fields** — patients gain `cedula` (`000-0000000-0` format, encrypted), `nss` (digits only, encrypted), `ars` FK, `ars_program` FK (validated to belong to the patient's ARS). All optional. Frontend patient form + columns updated.
+- **Receptionist PII** — receptionists now see/edit full patient PII (phone/address/email/cedula/nss). Masking (redacted `••`) applies only to **IT** and **CENTER_MANAGER** (extended to names/birth-date in audit #2). Existing masking tests + `qa_rbac_matrix.ps1` + `qa_full_verification.ps1` updated to match.
+- **Audit completion** — `AuditLog.Action` now declares `LOGOUT`; `UserViewSet` audits user CRUD; CREATE audit restored for medical records / consultation logs / record images / appointments (their `perform_create` overrides had bypassed `AuditMixin`); `AuditLog` registered in Django admin (read-only).
+- **QA fixes** — program `id` made writable in `ARSSerializer` (PATCH reconcile no longer 500s); fixed `Test-Masking` counting bug in `qa_rbac_matrix.ps1` (function emitted two pipeline outputs so the check was always truthy).
+
+### 2026-08-05 — QA + cedula + modal-guard pass
+Independent QA agent run + regression fixes (verified: **118 pytest passed**, frontend builds, **6 vitest passed**, live cedula checks 12/12). Commits: backend `0eda59d`, frontend `b74e49c`, `5840710`, infra `5d4f5b8` (QA cedula script).
+- **QA agent report** — 100 pytest at run start; RBAC matrix 58/58, PII masking, JWT rotation + blacklist, login throttle 429 at attempt 11, E2E smoke all green; vitest 5/6 then 6/6 after the BUG-1 fix.
+- **Cedula digits-only** — backend `0eda59d`: `validate_cedula` strips non-digits and enforces exactly 11; `CEDULA_RE` removed. Frontend `b74e49c`: submit normalizes, columns format, `inputMode="numeric"` + `maxLength={13}`. Live-verified (`010-0108492-0` → stored `01001084920`; 10-digit → 400; IT/CM masked).
+- **Modal drag-release guard (QA BUG-1)** — frontend `b74e49c` (shared `FormModal`) + `5840710` (Records detail modal): backdrop `onPointerDown` records press origin; `.modal` `onPointerDown` clears the flag + `stopPropagation()`; backdrop closes only when the press actually started on it. Fixes stale-flag close after pointerup-outside/pointercancel.
+- **Regression tests** — `backend/tests/test_cedula_digits_only.py`, `frontend/src/components/ui.test.tsx` + vitest config/setup, `infra/scripts/qa_cedula_verification.ps1`.
+- **Accepted (cosmetic, BUG-2)** — patient edit form shows raw stored digits (not formatted) when reopening an existing patient.
+
+### 2026-08-05 — Security audit #2 (HIGH/MEDIUM fixes)
+Independent security audit → **0 CRITICAL / 3 HIGH / 6 MEDIUM**, all addressed and committed (backend `25ddc94`, frontend `ef40919`, infra `5d4f5b8`). Live-verified: `/media/` 404 without token + 200 with signed token, IT-create-ADMIN → 400, weak password → 400, IT/CM masked names, doctor foreign-center record → 400.
+- **H-01 deps** — `cryptography>=48.0.1,<49.0` (was 43; GHSA-537c-gmf6-5ccf etc.) and `Pillow>=12.3.0,<13.0` (CVE-2026-59199 heap OOB) in `requirements/base.txt`.
+- **H-02 token-guarded media** — new `ProtectedMediaView` (`records/views.py`) serving `MEDIA_URL` only to holders of a short-lived HMAC-signed token (`sign_media_token`/`verify_media_token` in `core/services.py`, 1h `MEDIA_TOKEN_MAX_AGE`); `get_image_url` appends `?token=…`; `config/urls.py` routes `media/<path>` (removed DEBUG `static()`); prod nginx now proxies `/media/` to the backend instead of serving the volume directly.
+- **H-03 IT role boundary** — `accounts/models.py` save(): ADMIN keeps staff+superuser, IT forced `is_staff=False, is_superuser=False` (migration `0002_revoke_it_staff` flips existing IT); `_guard_role_assignment` (non-admin cannot assign ADMIN role or modify admin accounts); destroy of an ADMIN by non-admin → 403. Defeats IT using Django admin to read decrypted PII.
+- **M-01 password policy** — `validate_password` (AUTH_PASSWORD_VALIDATORS) runs on API user creation.
+- **M-02/M-03 patient center scoping** — patients gain nullable `center` FK (**centerless = unbound = visible to all staff**, so fixtures/tests/smoke scripts stay valid); doctors see centerless OR own-center patients (+ records in own centers); doctor writes (records/logs/images) rejected for patients bound to foreign centers (`_validate_patient_scope` + RecordImage record-scope check); receptionists/nurses see all patients; doctor-created records default to their center. Frontend patient form + table gained a center selector (`Patients.tsx`, i18n keys, `center`/`center_name` in types).
+- **M-04 names/birth-date encryption** — `first_name`/`last_name` → `EncryptedCharField()`, `birth_date` → `EncryptedCharField(null=True, blank=True)`; **accepted tradeoff:** plaintext lowercase `search_name` (201) column + index keeps name search working (`?search=`, `filterset_fields` on `search_name`). Migrations split **0003** schema / **0004** `encrypt_patient_names` data (raw-SQL encryption of existing rows, `is_encrypted` guard) / **0005** search_name index — separate transactions because Postgres rejects `CREATE INDEX` on a table with pending trigger events from prior ALTER/UPDATE.
+- **M-05 masking extended** — `PatientSerializer.to_representation` now also masks `first_name`/`last_name`/`full_name`/`birth_date` and nulls `age` for IT/CM.
+- **M-06 HTTPS-only prod** — `nginx.conf`: port 80 → 301 to HTTPS, `listen 443 ssl` (TLS1.2/1.3, HSTS); `docker-compose.prod.yml`: `cert-init` service auto-generates a self-signed cert into a `certs` volume, frontend mounts it read-only, ports `443:443` + `80:80`, `DJANGO_SECURE_SSL_REDIRECT=true`.
+- **Also** — `SearchFilter` added to `PatientViewSet` (name search now actually queryable); `RecordImageViewSet` ordered to silence the DRF unordered-list warning; `/media/` path-traversal guard in `ProtectedMediaView`.
 
 ---
 
-## Current Handoff State (2026-08-05)
+## Current State (2026-08-05)
 
 Everything below was verified against the live stack. All three repos are clean (`git status` empty).
 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `5d4f5b8`     |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `0059337`     |
 | backend    | `backend/` (Django API)                                                                         | `25ddc94`     |
 | frontend   | `frontend/` (React SPA)                                                                         | `ef40919`     |
 
@@ -144,69 +194,32 @@ Everything below was verified against the live stack. All three repos are clean 
 - Swagger UI: http://localhost:8000/api/docs/ · OpenAPI schema: http://localhost:8000/api/schema/ · Health: http://localhost:8000/api/health/
 - App: http://localhost:5173 (login page) — Vite proxies `/api` and `/media` to the backend.
 - Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by the `cert-init` service; browser will warn until real certs are mounted).
-- Live QA smoke scripts (run from host): `.\scripts\qa_rbac_matrix.ps1`, `.\scripts\qa_integration_smoke.ps1`, and `.\scripts\qa_cedula_verification.ps1` (PowerShell 5.1; they hit http://localhost:8000 directly and print a PASS/FAIL report).
+- Live QA smoke scripts (run from host): `.\scripts\qa_rbac_matrix.ps1`, `.\scripts\qa_full_verification.ps1`, `.\scripts\qa_integration_smoke.ps1`, and `.\scripts\qa_cedula_verification.ps1` (PowerShell 5.1; they hit http://localhost:8000 directly and print a PASS/FAIL report).
 
 ### Known pitfalls (IMPORTANT for any continuation agent)
 - **Vite stale-cache on Docker bind-mount:** after changing frontend code or env, the container may keep serving old transformed modules. Root cause of the AuthProvider crash and the `ERR_NAME_NOT_RESOLVED` login bug. **Fix: recreate the container** — `docker compose up -d --force-recreate frontend` (or at least `up -d`), NOT plain `docker compose restart`.
 - **Proxy config:** browser must use the *relative* `/api` (so Vite proxies server-side). The server-side proxy target is `PROXY_TARGET=http://backend:8000/api` (compose). Do **not** set `VITE_API_BASE_URL` for dev — it bakes the Docker hostname into the client bundle.
 - **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it** — existing encrypted patient rows in Postgres become unreadable. Keep the same key across environments. The key **was rotated on 2026-08-05** (it had been committed in `settings/test.py`); to rotate again use `python manage.py reencrypt_pii --old-key <OLD_KEY>` (backend container) after updating the env, then recreate the backend.
 - **Login throttle race between smoke scripts:** the `login` throttle is 10/min per IP, and `qa_full_verification.ps1` deliberately fires ~11 rapid logins. Running the smoke scripts back-to-back within the same minute causes the next script's role logins to be 429-throttled (failures look like empty tokens / "bad_authorization_header"). **Wait ~70s between smoke script runs.**
-- **PowerShell 5.1** (Windows host): no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe` and `Invoke-RestMethod`.
+- **Postgres index vs. data migration:** encrypting existing rows (`patients 0004`) must run in a separate migration transaction from the `search_name` index (`0005`) — Postgres rejects `CREATE INDEX` on a table with pending trigger events. Keep this split if adding columns + backfills.
+- **PowerShell 5.1** (Windows host): no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe` and `Invoke-RestMethod`. For multipart uploads use `curl.exe -F` (no `Invoke-RestMethod -Form` in 5.1).
 
 ### Environment
 - Windows host · Python 3.13.3 · Node 22.14.0 · Docker 29.6.1 + Compose v5.3.0 · git 2.45.1.
 - Backend venv at `backend\.venv`; deps in `backend/requirements/{base,dev,prod}.txt`.
 - Dev data: seed admin `admin` / `AdminPass123!`. Per-role test credentials: **`infra/TEST_USERS.md`** (all six roles verified logging in).
 
-### QA subagent (opencode)
-- Global agent file: `~/.config/opencode/agent/qa.md` (mode: subagent). Use it for independent QA runs, e.g. `subagent_type: "qa"`, prompt "run QA on the app". Requires an opencode restart to load (it was created after the last start).
-- The agent is empowered to write/update automated tests but must NOT modify application code — it reports bugs for the main agent to fix.
+### Subagents (opencode)
+- Global agent files under `~/.config/opencode/agent/`:
+  - **`qa.md`** (mode: subagent) — independent QA runs, e.g. `subagent_type: "qa"`, prompt "run QA on the app". May write/update automated tests but must NOT modify application code — reports bugs for the main agent to fix.
+  - **`security.md`** (mode: subagent) — independent security audits. New subagents need an opencode **restart** to load.
 
-### Security remediation pass (2026-08-05)
-Driven by an independent security audit (subagent). Original Critical/High findings closed; verified live + by 33 new regression tests:
-- **C-01** — real `DJANGO_SECRET_KEY` (in gitignored `.env`); `prod.py` now fails fast on placeholder/short keys, empty `ALLOWED_HOSTS`, or missing `PII_FIELD_KEY`.
-- **H-01** — new `docker-compose.prod.yml` (gunicorn, `config.settings.prod`, `DJANGO_DEBUG=false`, built images, no bind mounts, Redis `requirepass`, loopback-only DB); `frontend/Dockerfile.prod` + hardened `nginx.conf` (CSP, HSTS, nosniff, X-Frame-Options, `/media/` served from a shared volume); `backend/.dockerignore` excludes `.env`.
-- **H-02** — `POST /api/auth/logout/` blacklists the refresh token; frontend calls it on logout.
-- **H-03** — center-scoped querysets + write-side checks: doctors restricted to their own appointments/schedules and cannot attach unapproved centers.
-- **H-04** — PII masking now applies to IT, receptionist, and center_manager (full PII only for admin/doctor/nurse).
-- **H-05 (partial)** — strict CSP + security headers at the prod edge; tokens still in `localStorage` (httpOnly-cookie migration is a known follow-up).
-- **M-01** — `/api/schema/` + `/api/docs/` now require Admin/IT (anonymous 401).
-- **M-03** — image uploads validate real image content (Pillow `verify`) and use randomized UUID filenames.
-- **M-04** — dev compose binds PostgreSQL/Redis to `127.0.0.1`; prod Redis uses a password.
-- **M-05** — PII decryption fails closed (never returns raw ciphertext); empty/None handled in the field converters.
-- **N-1 (rotation)** — the Fernet PII key that had been committed in `settings/test.py` was rotated; `test.py` now generates an ephemeral key per run; `reencrypt_pii` management command re-encrypted 113 existing rows.
-- **N-2** — doctor schedules validated like appointments (own profile + approved center only).
-- **L-03** — `CORS_ALLOW_CREDENTIALS=False`; **I-03** — encrypted email removed from patient search.
-- **Known remaining (accepted):** tokens in `localStorage` (httpOnly-cookie migration is a follow-up), non-doctor roles see all centers (no user↔center model yet for those roles), Django admin still exposes decrypted PII to the single `is_staff` admin account, prod TLS uses a self-signed cert (real certs must be mounted before public exposure), patient edit form shows raw stored digits for cédula (cosmetic).
-
-## Feature pass (2026-08-05)
-Spanish-default i18n, ARS/insurance domain, receptionist PII access, and audit completion (verified: **90 pytest passed**, frontend builds, all three live smoke scripts green):
-- **Default language Spanish** — frontend defaults to `es` (persisted via `localStorage("mc_lang")`); backend `LANGUAGE_CODE = "es"` (DRF/SimpleJWT/admin messages now Spanish — tests assert on `code`/status, not English text).
-- **ARS domain** — new `backend/apps/ars`: `ARS` (unique `ars_id`, name) + `ARSProgram` (name, unique per ARS); seeded via data migration: **SEMMA** (`SM`, program "P Y P SEMMA") and **SENASA** (`SE`, program "SENASA Contigo"). API `api/ars/` (read: any staff; write: ADMIN/RECEPTIONIST only) with writable nested `programs` (0..n, reconciled on save). Frontend `/ars` page (ADMIN/RECEPTIONIST) with inline program editor.
-- **Patient insurance fields** — patients gain `cedula` (`000-0000000-0` format, encrypted), `nss` (digits only, encrypted), `ars` FK, `ars_program` FK (validated to belong to the patient's ARS). All optional. Frontend patient form + columns updated.
-- **Receptionist PII** — receptionists now see/edit full patient PII (phone/address/email/cedula/nss). Masking (redacted `••`) now applies only to **IT** and **CENTER_MANAGER**. Existing masking tests + `qa_rbac_matrix.ps1` + `qa_full_verification.ps1` updated to match.
-- **Audit completion** — `AuditLog.Action` now declares `LOGOUT`; `UserViewSet` audits user CRUD; CREATE audit restored for medical records / consultation logs / record images / appointments (their `perform_create` overrides had bypassed `AuditMixin`); `AuditLog` registered in Django admin (read-only).
-- **QA fixes** — program `id` made writable in `ARSSerializer` (PATCH reconcile no longer 500s); fixed `Test-Masking` counting bug in `qa_rbac_matrix.ps1` (function emitted two pipeline outputs so the check was always truthy).
-
-## QA + cedula + modal-guard pass (2026-08-05)
-Independent QA agent run + regression fixes (verified: **118 pytest passed**, frontend builds, **6 vitest passed**, live cedula checks 12/12):
-- **QA agent report** — 100 pytest at run start; RBAC matrix 58/58, PII masking, JWT rotation + blacklist, login throttle 429 at attempt 11, E2E smoke all green; vitest 5/6 then 6/6 after the BUG-1 fix.
-- **Cedula digits-only** — backend `0eda59d`: `validate_cedula` strips non-digits and enforces exactly 11; `CEDULA_RE` removed. Frontend `b74e49c`: submit normalizes, columns format, `inputMode="numeric"` + `maxLength={13}`. Live-verified (`010-0108492-0` → stored `01001084920`; 10-digit → 400; IT/CM masked).
-- **Modal drag-release guard (QA BUG-1)** — frontend `b74e49c` (shared `FormModal`) + `5840710` (Records detail modal): backdrop `onPointerDown` records press origin; `.modal` `onPointerDown` clears the flag + `stopPropagation()`; backdrop closes only when the press actually started on it. Fixes stale-flag close after pointerup-outside/pointercancel.
-- **Regression tests** — `backend/tests/test_cedula_digits_only.py`, `frontend/src/components/ui.test.tsx` + vitest config/setup, `infra/scripts/qa_cedula_verification.ps1`.
-- **Accepted (cosmetic, BUG-2)** — patient edit form shows raw stored digits (not formatted) when reopening an existing patient.
-
-## Second security audit + fixes (2026-08-05)
-Independent security audit → **0 CRITICAL / 3 HIGH / 6 MEDIUM**, all addressed and committed (backend `25ddc94`, frontend `ef40919`, infra `5d4f5b8`). Live-verified: `/media/` 404 without token + 200 with signed token, IT-create-ADMIN → 400, weak password → 400, IT/CM masked names, doctor foreign-center record → 400.
-- **H-01 deps** — `cryptography>=48.0.1,<49.0` (was 43; GHSA-537c-gmf6-5ccf etc.) and `Pillow>=12.3.0,<13.0` (CVE-2026-59199 heap OOB) in `requirements/base.txt`.
-- **H-02 token-guarded media** — new `ProtectedMediaView` (`records/views.py`) serving `MEDIA_URL` only to holders of a short-lived HMAC-signed token (`sign_media_token`/`verify_media_token` in `core/services.py`, 1h `MEDIA_TOKEN_MAX_AGE`); `get_image_url` appends `?token=…`; `config/urls.py` routes `media/<path>` (removed DEBUG `static()`); prod nginx now proxies `/media/` to the backend instead of serving the volume directly.
-- **H-03 IT role boundary** — `accounts/models.py` save(): ADMIN keeps staff+superuser, IT forced `is_staff=False, is_superuser=False` (migration `0002_revoke_it_staff` flips existing IT); `_guard_role_assignment` (non-admin cannot assign ADMIN role or modify admin accounts); destroy of an ADMIN by non-admin → 403. Defeats IT using Django admin to read decrypted PII.
-- **M-01 password policy** — `validate_password` (AUTH_PASSWORD_VALIDATORS) runs on API user creation.
-- **M-02/M-03 patient center scoping** — patients gain nullable `center` FK (**centerless = unbound = visible to all staff**, so fixtures/tests/smoke scripts stay valid); doctors see centerless OR own-center patients (+ records in own centers); doctor writes (records/logs/images) rejected for patients bound to foreign centers (`_validate_patient_scope` + RecordImage record-scope check); receptionists/nurses see all patients; doctor-created records default to their center. Frontend patient form + table gained a center selector (`Patients.tsx`, i18n keys, `center`/`center_name` in types).
-- **M-04 names/birth-date encryption** — `first_name`/`last_name` → `EncryptedCharField()`, `birth_date` → `EncryptedCharField(null=True, blank=True)`; **accepted tradeoff:** plaintext lowercase `search_name` (201) column + index keeps name search working (`?search=`, `filterset_fields` on `search_name`). Migrations split **0003** schema / **0004** `encrypt_patient_names` data (raw-SQL encryption of existing rows, `is_encrypted` guard) / **0005** search_name index — separate transactions because Postgres rejects `CREATE INDEX` on a table with pending trigger events from prior ALTER/UPDATE.
-- **M-05 masking extended** — `PatientSerializer.to_representation` now also masks `first_name`/`last_name`/`full_name`/`birth_date` and nulls `age` for IT/CM.
-- **M-06 HTTPS-only prod** — `nginx.conf`: port 80 → 301 to HTTPS, `listen 443 ssl` (TLS1.2/1.3, HSTS); `docker-compose.prod.yml`: `cert-init` service auto-generates a self-signed cert into a `certs` volume, frontend mounts it read-only, ports `443:443` + `80:80`, `DJANGO_SECURE_SSL_REDIRECT=true`.
-- **Also** — `SearchFilter` added to `PatientViewSet` (name search now actually queryable); `RecordImageViewSet` ordered to silence the DRF unordered-list warning; `/media/` path-traversal guard in `ProtectedMediaView`.
+### Accepted risks (current, 2026-08-05)
+- JWT tokens in `localStorage` (httpOnly `Secure` cookie migration is a follow-up).
+- Non-doctor staff roles (receptionist/nurse/IT/CM) still see all centers (no user↔center visibility model for those roles).
+- Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
+- Prod TLS uses a self-signed cert (real certs must be mounted before public exposure).
+- Patient edit form shows raw stored digits for cédula when reopening (cosmetic, BUG-2).
 
 ## Suggested Next Steps (prioritized)
 1. **Security follow-ups (from the accepted-risk list):** move JWT refresh to an httpOnly `Secure` cookie flow (replaces `localStorage` tokens).
