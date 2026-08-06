@@ -243,6 +243,13 @@ Five frontend feature requests + all findings from independent QA and security a
 - **D1 deps** — `cryptography>=49.0.0,<51.0` (50.0.0 installed in venv; CVE fix).
 - **Deferred: D3 react-router v8** — requires React ≥ 19.2.7, the app is on React 18; not upgraded (documented accepted risk).
 
+### 2026-08-06 — Patient-create fix + NSS validation
+Adding a patient with admin appeared impossible because backend validation 400s were silently swallowed by the frontend. Fixed + NSS hardening (backend `aa99fbe`, frontend `21dda54`):
+- **Error surfacing** — `FormModal` gained an `error` prop (alert banner); `Patients.tsx` catches API errors and flattens DRF field messages (e.g. `nss: NSS must contain digits only.`) instead of failing silently.
+- **NSS frontend** — `inputMode="numeric"`, `maxLength={11}`, strips non-digits as you type.
+- **NSS backend** — `validate_nss` NFKC-normalizes fullwidth digits, rejects letters/symbols/non-ASCII, enforces max 11 digits (previously accepted 12-digit and fullwidth values).
+- Verified: **146 pytest**, **16 vitest**, build clean; live: 12-digit → 400, fullwidth → stored ASCII, letters → 400.
+
 ---
 
 ## Current State (2026-08-06)
@@ -253,8 +260,8 @@ Everything below was verified against the live stack. All three repos are clean 
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
 | infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `26b7d9f`     |
-| backend    | `backend/` (Django API)                                                                         | `4156510`     |
-| frontend   | `frontend/` (React SPA)                                                                         | `a51c1ef`     |
+| backend    | `backend/` (Django API)                                                                         | `aa99fbe`     |
+| frontend   | `frontend/` (React SPA)                                                                         | `21dda54`     |
 
 ### Runbook
 - Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.
