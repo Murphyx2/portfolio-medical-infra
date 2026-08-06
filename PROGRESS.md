@@ -228,24 +228,39 @@ Independent security audit → **0 CRITICAL / 3 HIGH / 6 MEDIUM**, all addressed
 - **M-06 HTTPS-only prod** — `nginx.conf`: port 80 → 301 to HTTPS, `listen 443 ssl` (TLS1.2/1.3, HSTS); `docker-compose.prod.yml`: `cert-init` service auto-generates a self-signed cert into a `certs` volume, frontend mounts it read-only, ports `443:443` + `80:80`, `DJANGO_SECURE_SSL_REDIRECT=true`.
 - **Also** — `SearchFilter` added to `PatientViewSet` (name search now actually queryable); `RecordImageViewSet` ordered to silence the DRF unordered-list warning; `/media/` path-traversal guard in `ProtectedMediaView`.
 
+### 2026-08-06 — UI feature batch + QA/Security audit #3 follow-ups
+Five frontend feature requests + all findings from independent QA and security audit runs (verified: **144 pytest passed**, frontend builds, **15 vitest passed**, live E2E smoke green). Commits: backend `4156510`, frontend `a51c1ef`, infra `26b7d9f`.
+- **i18n of shared chrome** — `ui.tsx`/`guards.tsx` use `useTranslation` for every action label (`common.actions/edit/delete/cancel/close/view/noData/loading/deleteConfirm/phoneInvalid`; new keys added to both `es.json` and `en.json`).
+- **Phone formatting + validation** — new `src/utils/phone.ts` (+10 vitest): stored digits-only, displayed `(809) 555-1212`, format-as-you-type on Patients/Centers/Doctors forms (`type="tel"`); backend `core/validators.py` `validate_phone` (exactly 10 digits, NFKC-normalized, letters rejected) wired into patient/center/doctor serializers; empty-required-phone guard in Centers/Doctors forms (QA BUG-3). Live: `(809) 555-1212` → stored `8095551212`.
+- **Patient form layout** — cédula field moved below last name (cosmetic request).
+- **Records page** — patient name is now a clickable row link that opens the record detail for all staff (replaces the old `onEdit`-based action); detail header shows `Records · patient name` with the record title in a subtitle.
+- **Backend input validation (QA BUG-1/BUG-2)** — `PatientSerializer.validate_email` (Django email validator) + `validate_birth_date` (isoformat, not in future). Live: bad email → 400.
+- **F1 masking extended** — `is_masked_role()` (IT/CM only) now also applied in `MedicalRecordSerializer`, `ConsultationLogSerializer`, `AppointmentSerializer` (full_name, doctor/created_by names, notes). Live: IT sees `Li***ck` / `se***te`.
+- **F2 admin demotion** — `User.save()` clears `is_staff`/`is_superuser` for all non-ADMIN roles (migration `0003_flags_from_role` applied to the live stack).
+- **F4 search oracle** — masked roles get `search_fields=[]` + `filterset_fields=["gender","ars","center"]` only (name-search oracle closed). Live: IT `?search=` returns the full list.
+- **F5 media guard** — `ProtectedMediaView` uses `is_relative_to(media_root)` instead of a manual prefix check.
+- **F6 nginx** — `/api/` and `/media/` proxies overwrite `X-Forwarded-For` (`$remote_addr`) rather than appending.
+- **D1 deps** — `cryptography>=49.0.0,<51.0` (50.0.0 installed in venv; CVE fix).
+- **Deferred: D3 react-router v8** — requires React ≥ 19.2.7, the app is on React 18; not upgraded (documented accepted risk).
+
 ---
 
-## Current State (2026-08-05)
+## Current State (2026-08-06)
 
 Everything below was verified against the live stack. All three repos are clean (`git status` empty).
 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `f453be8`     |
-| backend    | `backend/` (Django API)                                                                         | `25ddc94`     |
-| frontend   | `frontend/` (React SPA)                                                                         | `ef40919`     |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `26b7d9f`     |
+| backend    | `backend/` (Django API)                                                                         | `4156510`     |
+| frontend   | `frontend/` (React SPA)                                                                         | `a51c1ef`     |
 
 ### Runbook
 - Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.
-- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **118 passed**).
+- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **144 passed**).
 - Frontend build: `npm run build` (run from `frontend/`).
-- Frontend tests: `npm test` (vitest + RTL; expect **6 passed**).
+- Frontend tests: `npm test` (vitest + RTL; expect **15 passed**).
 - Swagger UI: http://localhost:8000/api/docs/ · OpenAPI schema: http://localhost:8000/api/schema/ · Health: http://localhost:8000/api/health/
 - App: http://localhost:5173 (login page) — Vite proxies `/api` and `/media` to the backend.
 - Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by the `cert-init` service; browser will warn until real certs are mounted).
@@ -275,6 +290,8 @@ Everything below was verified against the live stack. All three repos are clean 
 - Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
 - Prod TLS uses a self-signed cert (real certs must be mounted before public exposure).
 - Patient edit form shows raw stored digits for cédula when reopening (cosmetic, BUG-2).
+- `react-router` stays on v7 (D3 deferral) — v8 needs React ≥ 19.2.7; app is on React 18. Upgrade React as a separate task before bumping.
+- Records detail shows raw SOAP section initials (cosmetic; a "skip section" helper could hide them).
 
 ### Risk assessment / information handling (verified 2026-08-05)
 What someone obtaining this document **and/or** the repos can and cannot do:
