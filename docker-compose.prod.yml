@@ -39,8 +39,7 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.prod
       DJANGO_DEBUG: "false"
-      # No TLS terminator in this stack yet; terminate at a proxy in real deploys.
-      DJANGO_SECURE_SSL_REDIRECT: "false"
+      DJANGO_SECURE_SSL_REDIRECT: "true"
       POSTGRES_HOST: db
       REDIS_URL: redis://:${REDIS_PASSWORD}@cache:6379/0
     volumes:
@@ -57,6 +56,20 @@ services:
       cache:
         condition: service_healthy
 
+  cert-init:
+    image: alpine:3.20
+    container_name: mc_prod_cert_init
+    restart: "no"
+    command: >
+      sh -c "apk add --no-cache openssl &&
+             mkdir -p /certs &&
+             [ -f /certs/server.key ] ||
+             openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+               -keyout /certs/server.key -out /certs/server.crt \
+               -subj '/CN=medicalconsultations.local'"
+    volumes:
+      - certs:/certs
+
   frontend:
     build:
       context: ../frontend
@@ -64,12 +77,15 @@ services:
     container_name: mc_prod_frontend
     restart: unless-stopped
     volumes:
-      - media_volume:/media:ro
+      - certs:/etc/nginx/certs:ro
     ports:
+      - "443:443"
       - "80:80"
     depends_on:
       - backend
+      - cert-init
 
 volumes:
   pgdata:
   media_volume:
+  certs:
