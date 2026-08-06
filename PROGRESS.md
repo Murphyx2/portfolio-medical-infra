@@ -42,6 +42,26 @@ is handled under international security standards.
 3. **Medicines** — generic (medical) term, commercial name, concentration.
 4. **Appointments** — created by a doctor or a receptionist for a patient.
 
+## Data Model (entities & design intent)
+
+Backend models live under `backend/apps/` (one folder per app, each with models/serializers/views/urls/tests). Key entities and the non-obvious decisions a continuation model must preserve:
+
+| Entity | App | Notes / design intent |
+|--------|-----|----------------------|
+| `User` | accounts | Custom user; `role` ∈ {ADMIN, DOCTOR, RECEPTIONIST, IT, NURSE, CENTER_MANAGER}. **Only ADMIN has `is_staff`/`is_superuser`**; IT is force-revoked in `save()` (audit #2, H-03). |
+| `MedicalCenter` | centers | name, code, address, phone, email. |
+| `DoctorCenterBinding` | centers | Doctor↔center with `approved` (admin-approves); drives doctor scoping. |
+| `DoctorProfile` / `DoctorSchedule` | doctors | Profile (specialty, license, contacts) + optional per-center presence schedule. |
+| `Patient` | patients | PII encrypted at rest: `first_name`/`last_name`/`birth_date`/`phone`/`address`/`email`/`cedula`/`nss` (all `EncryptedCharField`); **plaintext lowercase `search_name`** (indexed) keeps name search working; `gender`; `ars`/`ars_program` FKs; **nullable `center` FK — `NULL` = unbound = visible to all staff**, non-null = scoped to that center's doctors. |
+| `MedicalRecord` | records | per-patient clinical record; `patient`, `created_by`, `center`, diagnosis/treatment/notes; `images` relation. |
+| `ConsultationLog` | records | per-visit SOAP log; `patient`, `doctor`, `center`. |
+| `RecordImage` | records | attachment to a record; ≤ 5 MB, magic-byte verified (Pillow `verify`), randomized UUID filenames, served only via signed token. |
+| `ARS` / `ARSProgram` | ars | Insurer + programs; seeded SEMMA (`SM`) and SENASA (`SE`). |
+| `Medicine` | medicines | generic term, commercial name, concentration. |
+| `Appointment` | appointments | `patient`, `doctor`, `center`, `date_time`, `duration_minutes`, `status`, `created_by`. |
+
+**Migration split (audit #2, M-04):** `patients` 0003 (schema) / 0004 (`encrypt_patient_names` data backfill) / 0005 (`search_name` index) are separate transactions on purpose — Postgres rejects `CREATE INDEX` on a table with pending trigger events from prior `ALTER`/`UPDATE` in the same migration. Preserve this split when adding encrypted columns + backfills.
+
 ## Technology Decisions
 
 | Concern              | Decision                                                            |
@@ -74,6 +94,39 @@ MedicalConsultations/
 
 Each app in `backend/apps/` is a candidate future microservice:
 `accounts, ars, centers, doctors, patients, records, medicines, appointments`.
+
+## API Surface
+
+All routes are under `/api/` (backend `config/urls.py` + per-app `urls.py`; full schema at `/api/schema/`, Swagger at `/api/docs/` — both Admin/IT only). JWT via `Authorization: Bearer <access>`. Throttled endpoints (incl. login, 10/min/IP).
+
+| Endpoint | Methods | Permission gating |
+|----------|---------|-------------------|
+| `/api/auth/login/` | POST | public (throttled) |
+| `/api/auth/logout/` | POST | authenticated (blacklists refresh token) |
+| `/api/auth/token/refresh/` | POST | valid refresh token |
+| `/api/auth/me/` | GET | authenticated |
+| `/api/auth/users/` | CRUD | ADMIN (write); ADMIN/IT (read); non-admin cannot create/promote/delete ADMIN (audit #2 H-03) |
+| `/api/patients/` | CRUD | staff; `?search=` on `search_name`, filters `gender`/`ars`/`center`; doctors scoped to centerless + own-center; IT/CM get masked output |
+| `/api/medical-records/` | CRUD | staff read; write ADMIN/DOCTOR/NURSE; doctors scoped by center/creator |
+| `/api/consultation-logs/` | CRUD | staff read; write ADMIN/DOCTOR/NURSE; doctors scoped by center/doctor |
+| `/api/images/` | CRUD | staff read; write ADMIN/DOCTOR/NURSE (valid image ≤ 5 MB); doctors scoped by record center |
+| `/api/centers/` | CRUD | staff read; write ADMIN/IT |
+| `/api/bindings/` | CRUD | staff read; write/approve ADMIN only |
+| `/api/ars/` | CRUD | staff read; write ADMIN/RECEPTIONIST |
+| `/api/medicines/` | CRUD | staff |
+| `/api/appointments/` | CRUD | staff; doctors scoped to own schedules/approved centers |
+| `/api/schema/`, `/api/docs/` | GET | ADMIN/IT (audit #1 M-01) |
+| `/api/health/` | GET | public |
+| `/media/<path>?token=…` | GET | signed token only (1h, HMAC); 404 without/with bad token; path-traversal guarded (audit #2 H-02) |
+
+## Behavioral Invariants (do not regress)
+
+1. **PII masking:** full patient PII (incl. names/birth-date/age) for ADMIN/DOCTOR/NURSE/RECEPTIONIST; **masked for IT and CENTER_MANAGER** (`first_name`/`last_name`/`full_name`/`birth_date`, `age=null`, plus contact/identifiers).
+2. **Center scoping:** doctors see only centerless ("unbound") patients + their own centers' patients/records (or records they created); **doctor writes are rejected** for patients bound to foreign centers. Receptionists/nurses see all patients. Records/logs/images scope identically.
+3. **IT boundary:** IT is never `is_staff`/`is_superuser`; only ADMIN can assign the ADMIN role, modify, or delete admin accounts.
+4. **Media:** never served statically or by URL guessability — signed token required; no token = 404.
+5. **Passwords:** Django `AUTH_PASSWORD_VALIDATORS` run on API user creation.
+6. **Login throttling:** 10/min/IP — smoke scripts must wait ~70s between runs.
 
 ---
 
@@ -129,6 +182,7 @@ Each app in `backend/apps/` is a candidate future microservice:
 All 5 steps done. Backend (Django) 31 tests passing at this point; frontend builds; stack runs via Docker Compose with PostgreSQL + Redis cache; patient PII encrypted at rest; RBAC + audit + throttling in place; CI/CD ready to activate on push. *(Test count is now 118 — see Current State.)*
 
 ### 2026-08-05 — Security audit #1 (original security pass)
+> Note: finding codes here (C-01, H-01…H-05, M-01/M-03…M-05, N-1/N-2, L-03, I-03) are **independent** of audit #2's codes — each audit used its own numbering.
 Driven by an independent security audit (subagent). Original Critical/High findings closed; verified live + by 33 new regression tests. Commits: backend `256c474`, frontend `523dbb2`, infra `d9cea85`.
 - **C-01** — real `DJANGO_SECRET_KEY` (in gitignored `.env`); `prod.py` now fails fast on placeholder/short keys, empty `ALLOWED_HOSTS`, or missing `PII_FIELD_KEY`.
 - **H-01** — new `docker-compose.prod.yml` (gunicorn, `config.settings.prod`, `DJANGO_DEBUG=false`, built images, no bind mounts, Redis `requirepass`, loopback-only DB); `frontend/Dockerfile.prod` + hardened `nginx.conf` (CSP, HSTS, nosniff, X-Frame-Options, `/media/` served from a shared volume — later replaced by token-guarded proxy, see audit #2); `backend/.dockerignore` excludes `.env`.
@@ -162,6 +216,7 @@ Independent QA agent run + regression fixes (verified: **118 pytest passed**, fr
 - **Accepted (cosmetic, BUG-2)** — patient edit form shows raw stored digits (not formatted) when reopening an existing patient.
 
 ### 2026-08-05 — Security audit #2 (HIGH/MEDIUM fixes)
+> Note: finding codes here (H-01…H-03, M-01…M-06) are **independent** of audit #1's codes above — each audit used its own numbering.
 Independent security audit → **0 CRITICAL / 3 HIGH / 6 MEDIUM**, all addressed and committed (backend `25ddc94`, frontend `ef40919`, infra `5d4f5b8`). Live-verified: `/media/` 404 without token + 200 with signed token, IT-create-ADMIN → 400, weak password → 400, IT/CM masked names, doctor foreign-center record → 400.
 - **H-01 deps** — `cryptography>=48.0.1,<49.0` (was 43; GHSA-537c-gmf6-5ccf etc.) and `Pillow>=12.3.0,<13.0` (CVE-2026-59199 heap OOB) in `requirements/base.txt`.
 - **H-02 token-guarded media** — new `ProtectedMediaView` (`records/views.py`) serving `MEDIA_URL` only to holders of a short-lived HMAC-signed token (`sign_media_token`/`verify_media_token` in `core/services.py`, 1h `MEDIA_TOKEN_MAX_AGE`); `get_image_url` appends `?token=…`; `config/urls.py` routes `media/<path>` (removed DEBUG `static()`); prod nginx now proxies `/media/` to the backend instead of serving the volume directly.
@@ -220,6 +275,15 @@ Everything below was verified against the live stack. All three repos are clean 
 - Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
 - Prod TLS uses a self-signed cert (real certs must be mounted before public exposure).
 - Patient edit form shows raw stored digits for cédula when reopening (cosmetic, BUG-2).
+
+### Risk assessment / information handling (verified 2026-08-05)
+What someone obtaining this document **and/or** the repos can and cannot do:
+
+- **Not in the repos (secrets):** the real `.env` (DJANGO_SECRET_KEY, PII_FIELD_KEY, POSTGRES_PASSWORD, REDIS_PASSWORD) is **never committed** — gitignored in `infra/` and `backend/`, excluded via `backend/.dockerignore`, and absent from git history (verified). `PII_FIELD_KEY` is required to decrypt patient data; without it, encrypted-at-rest rows are unreadable even with full DB access.
+- **Public by design (repos = full project):** the three repos contain all source code, migrations, tests, CI, and compose files. Anyone with them can rebuild and run the entire application from scratch using `.env.example` + a freshly generated key. This is unavoidable — the code is the product.
+- **Dev credentials are exposed:** `admin`/`AdminPass123!` and role accounts (`Pass123!x`) live in `TEST_USERS.md` and the QA scripts. They are local-dev only — the stack binds to `127.0.0.1`/localhost, so they grant nothing unless a dev stack is reachable on a real IP.
+- **Security blueprint is visible:** the document describes the encryption scheme, masking rules, token-guarded media, endpoints, and exact finding numbers. Useful for targeting, but exploitation still requires real secrets (`.env`) or DB access; it does not by itself expose patient data.
+- **Operational rule:** `.env` is the only secret store. If these repos are ever pushed to a public remote, treat all documented dev credentials as compromised, keep ports loopback-bound, and never commit `.env`.
 
 ## Suggested Next Steps (prioritized)
 1. **Security follow-ups (from the accepted-risk list):** move JWT refresh to an httpOnly `Secure` cookie flow (replaces `localStorage` tokens).
