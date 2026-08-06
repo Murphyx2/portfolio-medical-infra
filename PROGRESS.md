@@ -182,7 +182,7 @@ Everything below was verified against the live stack. All three repos are clean 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `0059337`     |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `c3f8035`     |
 | backend    | `backend/` (Django API)                                                                         | `25ddc94`     |
 | frontend   | `frontend/` (React SPA)                                                                         | `ef40919`     |
 
