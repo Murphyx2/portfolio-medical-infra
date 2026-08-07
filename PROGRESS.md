@@ -285,9 +285,26 @@ New patients created via the form were invisible on the Patients page because th
 - **Fix** — `services/api.ts` `tryRefresh()` is now **single-flight**: a module-level promise is shared by all concurrent 401 handlers, so the refresh endpoint is hit exactly once, the token rotates once, and every waiting request retries with the new access token. `clearTokens()` only runs on a genuine refresh failure.
 - Verified: **35 vitest** (+2 new `services/api.test.ts`), build clean, frontend container recreated, HTTP 200.
 
+### 2026-08-07 — Security audit fixes M-01–M-07 + 3-day refresh token (backend `3aa27ee`, frontend `16a30a7`)
+- **M-01 (digit-search DoS)** — `Patient` gains plaintext `cedula_last4`/`nss_last4` index columns, populated in `save()` and backfilled by migration `0007`. Digit search now matches **in SQL on the trailing digits** (`patient_ids_matching_digits` in `core/services.py`) instead of decrypting every row in Python. Matching changed from "any substring of the full number" to "trailing digits": full/formatted numbers (`001-1234567-8`) and last-4 searches still work; prefix/middle-substring searches no longer match (2 tests updated to trailing forms).
+- **M-02 (nurse write-scoping)** — `CanManageRecords.has_object_permission`: nurses may update/destroy only records **they created** (owner resolved across `created_by`/`uploaded_by`/`doctor`); doctors keep center scoping; admins unrestricted. Record creation stays open to nurses.
+- **M-03 (doctor contact PII)** — `DoctorProfileSerializer` masks `license_number`/`contact_phone` and nulls `contact_email`/`bio` for everyone except admin/IT/the doctor themself. Frontend needed no change (`formatPhone` passes `•`-values through, `Table` renders null as empty, only ADMIN/IT can edit).
+- **M-04 (media tokens in logs)** — nginx `/media/` location now `access_log off;` so the signed `?token=` never reaches access logs.
+- **M-05 (cache headers)** — new `apps/core/middleware.NoStoreMiddleware` sets `Cache-Control: private, no-store, max-age=0` + `Pragma: no-cache` on all `/api/` and `/media/` responses (verified live).
+- **M-07 (admin audit trail)** — `AuditModelAdmin` base (mirrors the DRF `AuditMixin`) logs every admin add/change/delete to `AuditLog`; all app ModelAdmins inherit it (incl. `CustomUserAdmin(AuditModelAdmin, UserAdmin)`).
+- **H-03 (shorten refresh window)** — `JWT_REFRESH_LIFETIME_DAYS` default and `infra/.env` set to **3** days (was 7); verified live (refresh `exp` = 3 days).
+- Verified: **197 pytest** (176 + 19 new M-fix tests + 1 last-4 index test; 2 search tests updated), **35 vitest**, build clean, backend recreated (migrations `0006`/`0007` applied incl. data backfill), frontend HTTP 200.
+
+### Deferred — production hardening (recorded, no code changes)
+- **H-01** — dev compose publishes `0.0.0.0:8000/5173` with `DEBUG=true` and known default credentials (`admin/AdminPass123!`, role accounts `Pass123!x`). Bind to loopback + rotate creds before any non-local exposure.
+- **H-03 residual** — refresh token still in `localStorage`; httpOnly `Secure` `SameSite=Strict` cookie migration is the follow-up.
+- **M-06** — `react-router-dom@7.18.2` is in the GHSA-qwww-vcr4-c8h2 range, but the advisory only affects RSC mode and the app uses classic `BrowserRouter`; keep on v7 until the React ≥ 19.2.7 upgrade (see accepted risks).
+- **M-08** — prod compose ships a self-signed TLS cert together with `SECURE_HSTS_PRELOAD`; mount real CA certs before any public exposure.
+- **H-02 (reassessed, lower severity)** — the "committed PII key" was a **test-fixture key** in `settings/test.py` (pytest in-memory SQLite only); no persistent data was ever encrypted with it, so **no `reencrypt_pii` run is needed**. Optional git-history purge if the repo ever goes public.
+
 ---
 
-## Current State (2026-08-06)
+## Current State (2026-08-07)
 
 Everything below was verified against the live stack. All three repos are clean (`git status` empty).
 
@@ -295,23 +312,23 @@ Everything below was verified against the live stack. All three repos are clean 
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
 | infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `9a40c3c`     |
-| backend    | `backend/` (Django API)                                                                         | `4442f43`     |
-| frontend   | `frontend/` (React SPA)                                                                         | `c9cfa4d`     |
+| backend    | `backend/` (Django API)                                                                         | `3aa27ee`     |
+| frontend   | `frontend/` (React SPA)                                                                         | `16a30a7`     |
 
 ### Runbook
 - Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.
-- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **176 passed**).
+- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **197 passed**).
 - Frontend build: `npm run build` (run from `frontend/`).
 - Frontend tests: `npm test` (vitest + RTL; expect **35 passed**).
 - Swagger UI: http://localhost:8000/api/docs/ · OpenAPI schema: http://localhost:8000/api/schema/ · Health: http://localhost:8000/api/health/
 - App: http://localhost:5173 (login page) — Vite proxies `/api` and `/media` to the backend.
 - Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by the `cert-init` service; browser will warn until real certs are mounted).
-- Live QA smoke scripts (run from host): `.\scripts\qa_rbac_matrix.ps1`, `.\scripts\qa_full_verification.ps1`, `.\scripts\qa_integration_smoke.ps1`, and `.\scripts\qa_cedula_verification.ps1` (PowerShell 5.1; they hit http://localhost:8000 directly and print a PASS/FAIL report).
+- Live QA smoke scripts (run from host): `.\scripts\qa_live_verification.ps1` is the **current** one (37/37). The older `qa_rbac_matrix.ps1`, `qa_full_verification.ps1`, `qa_integration_smoke.ps1`, and `qa_cedula_verification.ps1` predate the 10-digit phone / 11-digit-NSS validators (their setup payloads now 400) and report false failures — updating them is a tracked follow-up.
 
 ### Known pitfalls (IMPORTANT for any continuation agent)
 - **Vite stale-cache on Docker bind-mount:** after changing frontend code or env, the container may keep serving old transformed modules. Root cause of the AuthProvider crash and the `ERR_NAME_NOT_RESOLVED` login bug. **Fix: recreate the container** — `docker compose up -d --force-recreate frontend` (or at least `up -d`), NOT plain `docker compose restart`.
 - **Proxy config:** browser must use the *relative* `/api` (so Vite proxies server-side). The server-side proxy target is `PROXY_TARGET=http://backend:8000/api` (compose). Do **not** set `VITE_API_BASE_URL` for dev — it bakes the Docker hostname into the client bundle.
-- **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it** — existing encrypted patient rows in Postgres become unreadable. Keep the same key across environments. The key **was rotated on 2026-08-05** (it had been committed in `settings/test.py`); to rotate again use `python manage.py reencrypt_pii --old-key <OLD_KEY>` (backend container) after updating the env, then recreate the backend.
+- **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it** — existing encrypted patient rows in Postgres become unreadable. Keep the same key across environments. The key **was rotated on 2026-08-05**; that old key only ever lived in the pytest `settings/test.py` (in-memory SQLite), so no persistent data was encrypted with it and no `reencrypt_pii` pass is required (H-02 reassessed). To rotate the current key, run `python manage.py reencrypt_pii --old-key <OLD_KEY>` (backend container) after updating the env, then recreate the backend.
 - **Login throttle race between smoke scripts:** the `login` throttle is 10/min per IP, and `qa_full_verification.ps1` deliberately fires ~11 rapid logins. Running the smoke scripts back-to-back within the same minute causes the next script's role logins to be 429-throttled (failures look like empty tokens / "bad_authorization_header"). **Wait ~70s between smoke script runs.**
 - **Postgres index vs. data migration:** encrypting existing rows (`patients 0004`) must run in a separate migration transaction from the `search_name` index (`0005`) — Postgres rejects `CREATE INDEX` on a table with pending trigger events. Keep this split if adding columns + backfills.
 - **PowerShell 5.1** (Windows host): no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe` and `Invoke-RestMethod`. For multipart uploads use `curl.exe -F` (no `Invoke-RestMethod -Form` in 5.1).
@@ -326,7 +343,7 @@ Everything below was verified against the live stack. All three repos are clean 
   - **`qa.md`** (mode: subagent) — independent QA runs, e.g. `subagent_type: "qa"`, prompt "run QA on the app". May write/update automated tests but must NOT modify application code — reports bugs for the main agent to fix.
   - **`security.md`** (mode: subagent) — independent security audits. New subagents need an opencode **restart** to load.
 
-### Accepted risks (current, 2026-08-05)
+### Accepted risks (current, 2026-08-07)
 - JWT tokens in `localStorage` (httpOnly `Secure` cookie migration is a follow-up).
 - Non-doctor staff roles (receptionist/nurse/IT/CM) still see all centers (no user↔center visibility model for those roles).
 - Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
