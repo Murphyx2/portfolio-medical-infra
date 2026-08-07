@@ -58,7 +58,7 @@ $adminTok = $admin.data.access
 Check "admin login" ($admin.status -eq 200) "status=$($admin.status)"
 
 # 1. POST with hyphenated cedula -> 201 digits-only
-$p1 = Call "Post" "$base/patients/" (Body @{ first_name="Ced"; last_name="Live$runId"; birth_date="1990-05-14"; gender="FEMALE"; phone="+1-555-0100"; email="ced$runId@example.com"; cedula="010-0108492-0"; nss="123456789" }) $adminTok
+$p1 = Call "Post" "$base/patients/" (Body @{ first_name="Ced"; last_name="Live$runId"; birth_date="1990-05-14"; gender="FEMALE"; phone="8095550100"; email="ced$runId@example.com"; cedula="010-0108492-0"; nss="123456789" }) $adminTok
 Check "POST hyphenated cedula -> 201" ($p1.status -eq 201) "status=$($p1.status) cedula='$($p1.data.cedula)'"
 Check "POST stored digits-only" ($p1.data.cedula -eq "01001084920") "got '$($p1.data.cedula)'"
 $p1Id = $p1.data.id

@@ -29,7 +29,7 @@ $docsAdm = (Call "Get" "$base/docs/" $null $adminTok).status
 Write-Output "schema gating: anon=$schemaAnon (exp 401), docs anon=$docsAnon (exp 401), schema admin=$schemaAdm (exp 200), docs admin=$docsAdm (exp 200)"
 
 # 1. Center with required phone
-$c = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $runId"; code="CC$runId"; address="Av. Principal 100"; phone="+1-555-2000" }) $adminTok
+$c = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $runId"; code="CC$runId"; address="Av. Principal 100"; phone="8095552000" }) $adminTok
 Write-Output "center create -> $($c.status) $(if (-not $c.ok) { $c.detail })"
 $centerId = $c.data.id
 
@@ -39,13 +39,13 @@ Write-Output "medicine create -> $($m.status) $(if (-not $m.ok) { $m.detail })"
 $medId = $m.data.id
 
 # 3. Doctor profile for the doctor user (fetch existing or create)
-$users = (Call "Get" "$base/auth/users/" $null $adminTok).data.results
+$users = (Call "Get" "$base/auth/users/?search=doctor" $null $adminTok).data.results
 $docUser = $users | Where-Object { $_.username -eq "doctor" } | Select-Object -First 1
 Write-Output "doctor user id: $($docUser.id)"
-$profiles = (Call "Get" "$base/doctors/profiles/" $null $adminTok).data.results
-$docProfile = $profiles | Where-Object { $_.user_id -eq $docUser.id } | Select-Object -First 1
+$profiles = (Call "Get" "$base/doctors/profiles/?user=$($docUser.id)" $null $adminTok).data.results
+$docProfile = $profiles | Select-Object -First 1
 if (-not $docProfile) {
-    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-QA-001"; contact_phone="+1-555-3000" }) $adminTok
+    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-QA-001"; contact_phone="8095553000" }) $adminTok
     $docProfile = $dp.data
 }
 $doctorProfileId = $docProfile.id
@@ -59,7 +59,7 @@ Write-Output "binding create -> $($bnd.status) $(if (-not $bnd.ok) { $bnd.detail
 $recep = (Call "Post" "$base/auth/login/" (Body @{ username="receptionist"; password="Pass123!x" }) $null)
 $recepTok = $recep.data.access
 Write-Output "receptionist login: $($recep.status)"
-$pat = Call "Post" "$base/patients/" (Body @{ first_name="Ana"; last_name="Perez"; birth_date="1990-05-14"; gender="FEMALE"; phone="+1-555-0100"; address="123 Main St"; email="ana.perez@example.com" }) $recepTok
+$pat = Call "Post" "$base/patients/" (Body @{ first_name="Ana"; last_name="Perez"; birth_date="1990-05-14"; gender="FEMALE"; phone="8095550100"; address="123 Main St"; email="ana.perez@example.com" }) $recepTok
 Write-Output "patient create -> $($pat.status)"
 $patientId = $pat.data.id
 

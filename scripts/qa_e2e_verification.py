@@ -79,6 +79,22 @@ def login(username, password):
     return st, data
 
 
+def sess_call(method, path, sess, token=None, body=None):
+    """Request that rides a persistent requests.Session (cookie jar)."""
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        r = sess.request(method, BASE + path, headers=headers, json=body, timeout=40)
+    except requests.RequestException as e:
+        return -1, {"_error": str(e)}
+    try:
+        data = r.json()
+    except Exception:
+        data = r.text
+    return r.status_code, data
+
+
 def db_check(patient_id, field="phone"):
     """Read the value straight from Postgres via the container's Django ORM."""
     code = (
@@ -136,7 +152,7 @@ print("--- Phone validation & formatting E2E ---")
 st, data = call("POST", "/patients/", token=tokens["RECEPTIONIST"], body={
     "first_name": "Fon", "last_name": "Tono", "gender": "MALE",
     "phone": "(809) 555-1212", "email": "fono@example.com",
-    "cedula": "001-1234567-8", "nss": "012345678901",
+    "cedula": "001-1234567-8", "nss": "01234567890",
 })
 phone_patient_id = data.get("id")
 report("patient phone (809) 555-1212 -> 201 & stored digits", st == 201 and data.get("phone") == "8095551212",
@@ -237,8 +253,8 @@ report("cedula letters-only -> 400", st == 400, f"status={st} body={str(data)[:1
 
 # nss validation
 st, data = call("POST", "/patients/", token=tokens["RECEPTIONIST"], body={
-    "first_name": "Nss", "last_name": "One", "gender": "MALE", "nss": "012345678901"})
-report("nss digits ok", st == 201 and data.get("nss") == "012345678901", f"status={st}")
+    "first_name": "Nss", "last_name": "One", "gender": "MALE", "nss": "01234567890"})
+report("nss digits ok (11 max)", st == 201 and data.get("nss") == "01234567890", f"status={st}")
 st, data = call("POST", "/patients/", token=tokens["RECEPTIONIST"], body={
     "first_name": "Nss", "last_name": "Bad", "gender": "MALE", "nss": "ABC12345"})
 report("nss letters -> 400", st == 400, f"status={st} body={str(data)[:120]}")
@@ -278,14 +294,15 @@ med_id = data.get("id")
 st, data = call("POST", "/ars/", token=tokens["ADMIN"], body={
     "ars_id": f"QA{RUN}", "name": f"ARS QA {RUN}", "programs": [{"name": "Básico"}]})
 ars_id = data.get("id")
-# doctor profile of the `doctor` account
-st, data = call("GET", "/doctors/profiles/", token=tokens["ADMIN"])
-profiles = data.get("results", [])
-doc_profile = next((p for p in profiles if p.get("username") == "doctor"), None)
-if not doc_profile:
-    st, data = call("GET", "/auth/users/", token=tokens["ADMIN"])
-    users = data.get("results", [])
-    docu = next((u for u in users if u.get("username") == "doctor"), None)
+# doctor profile of the `doctor` account (server-side search: the DB is large
+# enough that the default 20-row first page no longer contains the doctor user)
+st, data = call("GET", "/auth/users/?search=doctor", token=tokens["ADMIN"])
+docu = next((u for u in data.get("results", []) if u.get("username") == "doctor"), None)
+doc_profile = None
+if docu:
+    st, data = call("GET", f"/doctors/profiles/?user={docu['id']}", token=tokens["ADMIN"])
+    doc_profile = next((p for p in data.get("results", []) if p.get("username") == "doctor"), None)
+if not doc_profile and docu:
     st, data = call("POST", "/doctors/profiles/", token=tokens["ADMIN"], body={
         "user": docu["id"], "specialty": "Cardiology", "license_number": f"LIC-DOC-{RUN}",
         "contact_phone": "8095551212"})
@@ -368,13 +385,21 @@ st, data = call("POST", "/medical-records/", token=tokens["DOCTOR"], body={
 rec_id = data.get("id")
 report("record created by doctor", st == 201, f"status={st} id={rec_id}")
 rec_read_fail = []
+MASKED_ROLES = ("IT", "CENTER_MANAGER")
 for role in ROLES:
     st, data = call("GET", f"/medical-records/{rec_id}/", token=tokens[role])
-    name_ok = data.get("patient_info", {}).get("full_name") == "Fon Tono"
+    name = data.get("patient_info", {}).get("full_name")
+    # H-04/M-05: IT and CENTER_MANAGER see masked names (still navigable click path);
+    # the other roles see the full name.
+    if role in MASKED_ROLES:
+        name_ok = (name is not None) and (name != "Fon Tono") and ("\u2022" in name)
+    else:
+        name_ok = name == "Fon Tono"
     ok = st == 200 and name_ok
     if not ok:
-        rec_read_fail.append(f"{role}: got {st} full_name={data.get('patient_info', {}).get('full_name')}")
-    report(f"record detail GET as {role:14} (patient name visible)", ok, f"got={st} name={data.get('patient_info', {}).get('full_name')}")
+        rec_read_fail.append(f"{role}: got {st} full_name={name}")
+    label = "masked" if role in MASKED_ROLES else "visible"
+    report(f"record detail GET as {role:14} (patient name {label})", ok, f"got={st} name={name}")
     st2, logs = call("GET", f"/consultation-logs/?patient={phone_patient_id}", token=tokens[role])
     if st2 != 200:
         rec_read_fail.append(f"{role} consultation-logs list: {st2}")
@@ -410,22 +435,39 @@ for role in mask_roles:
            f"email={d.get('email')} phone={d.get('phone')} name={d.get('first_name')} age={d.get('age')}")
 report("PII masking per role", len(pii_fail) == 0, f"failures={len(pii_fail)}")
 
-# ---------------------------------------------------------------- JWT rotation + blacklist
-print("--- JWT rotation + logout ---")
-st, lr = login("admin", "AdminPass123!")
-rot_access = lr.get("access")
-rot_refresh = lr.get("refresh")
-st, rot = call("POST", "/auth/token/refresh/", body={"refresh": rot_refresh})
-report("refresh rotates (new refresh issued)", st == 200 and rot.get("refresh") and rot.get("access"),
-       f"status={st}")
-st, reuse = call("POST", "/auth/token/refresh/", body={"refresh": rot_refresh})
-report("reusing OLD refresh after rotation -> 401 blacklisted", st == 401, f"status={st}")
+# ---------------------------------------------------------------- JWT rotation + logout
+print("--- JWT rotation + logout (httpOnly cookie) ---")
+
+
+def login_sess(sess, username, password):
+    return sess_call("POST", "/auth/login/", sess, body={"username": username, "password": password})
+
+
+sess = requests.Session()
+st, lr = login_sess(sess, "admin", "AdminPass123!")
+report("login (cookie session) -> 200, access only in body",
+       st == 200 and "access" in lr and "refresh" not in lr, f"status={st}")
+old_cookie = sess.cookies.get("mc_refresh")
+report("httpOnly refresh cookie set on login", st == 200 and bool(old_cookie), f"cookie_set={bool(old_cookie)}")
+
+st, rot = sess_call("POST", "/auth/token/refresh/", sess)
+new_cookie = sess.cookies.get("mc_refresh")
+report("refresh via cookie rotates (new access + rotated cookie)",
+       st == 200 and rot.get("access") and new_cookie and new_cookie != old_cookie,
+       f"status={st} rotated={new_cookie != old_cookie}")
+sess.cookies.set("mc_refresh", old_cookie, path="/api/auth/")
+st, reuse = sess_call("POST", "/auth/token/refresh/", sess)
+report("reusing OLD cookie after rotation -> 401 blacklisted", st == 401, f"status={st}")
+
 # logout
-st, lr2 = login("admin", "AdminPass123!")
-acc2, ref2 = lr2.get("access"), lr2.get("refresh")
-st, _ = call("POST", "/auth/logout/", token=acc2, body={"refresh": ref2})
+sess2 = requests.Session()
+st, lr2 = login_sess(sess2, "admin", "AdminPass123!")
+acc2 = lr2.get("access")
+st, _ = sess_call("POST", "/auth/logout/", sess2, token=acc2)
 report("logout -> 204", st == 204, f"status={st}")
-st, reuse2 = call("POST", "/auth/token/refresh/", body={"refresh": ref2})
+report("logout clears the refresh cookie", sess2.cookies.get("mc_refresh") in (None, ""),
+       f"cookie={sess2.cookies.get('mc_refresh')!r}")
+st, reuse2 = sess_call("POST", "/auth/token/refresh/", sess2)
 report("refresh after logout -> 401", st == 401, f"status={st}")
 st, me = call("GET", "/auth/me/", token=acc2)
 report("access token still works after logout (access not blacklisted)", st == 200,

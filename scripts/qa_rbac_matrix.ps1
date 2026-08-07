@@ -4,11 +4,14 @@ $base = "http://localhost:8000/api"
 # unique_together(generic, commercial, concentration) - avoids 400 on reruns.
 $runId = Get-Random -Minimum 100000 -Maximum 999999
 
-function Call($method, $url, $body, $token) {
+function Call($method, $url, $body, $token, $session) {
     $headers = @{ "Content-Type" = "application/json" }
     if ($token) { $headers["Authorization"] = "Bearer $token" }
+    $params = @{ Uri = $url; Method = $method; Headers = $headers }
+    if ($body) { $params["Body"] = $body }
+    if ($session) { $params["WebSession"] = $session }
     try {
-        $r = Invoke-RestMethod -Uri $url -Method $method -Headers $headers -Body $body
+        $r = Invoke-RestMethod @params
         return @{ ok = $true; status = 200; data = $r }
     } catch {
         $sc = [int]$_.Exception.Response.StatusCode
@@ -17,9 +20,30 @@ function Call($method, $url, $body, $token) {
 }
 
 function Login($u, $p) {
+    # httpOnly refresh cookie (H-03): capture the Set-Cookie session so
+    # /auth/token/refresh/ and /auth/logout/ can be exercised cookie-first.
     $b = @{ username = $u; password = $p } | ConvertTo-Json
-    $r = Call "Post" "$base/auth/login/" $b $null
-    return $r
+    # login is throttled at 10/min per IP: retry with a backoff so this script
+    # stays green even when run right after another QA script.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            $r = Invoke-RestMethod -Uri "$base/auth/login/" -Method Post -Headers @{ "Content-Type" = "application/json" } -Body $b -SessionVariable s
+            return @{ ok = $true; status = 200; data = $r; session = $s }
+        } catch {
+            $sc = 0
+            try { $sc = [int]$_.Exception.Response.StatusCode } catch {}
+            if ($sc -eq 429 -and $attempt -lt 3) {
+                $wait = 30
+                try {
+                    $m = [regex]::Match($_.ErrorDetails.Message, "en (\d+) segundos")
+                    if ($m.Success) { $wait = [int]$m.Groups[1].Value + 3 }
+                } catch {}
+                Start-Sleep -Seconds $wait
+                continue
+            }
+            return @{ ok = $false; status = $sc; data = $null; session = $null }
+        }
+    }
 }
 
 function Body($obj) { return ($obj | ConvertTo-Json -Depth 5) }
@@ -42,23 +66,23 @@ foreach ($r in $roleUsers.GetEnumerator()) {
 }
 
 # create a patient as receptionist
-$patBody = Body @{ first_name="Ana"; last_name="Perez"; birth_date="1990-05-14"; gender="FEMALE"; phone="+1-555-0100"; address="123 Main St, Springfield"; email="ana.perez@example.com" }
+$patBody = Body @{ first_name="Ana"; last_name="Perez"; birth_date="1990-05-14"; gender="FEMALE"; phone="8095550100"; address="123 Main St, Springfield"; email="ana.perez@example.com" }
 $pat = Call "Post" "$base/patients/" $patBody $tokens["RECEPTIONIST"]
 Write-Output ("create patient -> {0}" -f $pat.status)
 $patId = $pat.data.id
 
 # ensure a center + medicine + doctor profile exist (admin) for appointment/record payloads
-$center = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $runId"; code="CC$runId"; address="Av. Principal 100"; phone="+1-555-2000" }) $tokens["ADMIN"]
+$center = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $runId"; code="CC$runId"; address="Av. Principal 100"; phone="8095552000" }) $tokens["ADMIN"]
 $med = Call "Post" "$base/medicines/" (Body @{ generic_name="Paracetamol"; commercial_name="Tylenol $runId"; concentration="500 mg" }) $tokens["ADMIN"]
 Write-Output ("ensure center -> {0}, medicine -> {1}" -f $center.status, $med.status)
 
 # doctor profile for the `doctor` user (fetch existing or create)
-$users = (Call "Get" "$base/auth/users/" $null $tokens["ADMIN"]).data.results
+$users = (Call "Get" "$base/auth/users/?search=doctor" $null $tokens["ADMIN"]).data.results
 $docUser = $users | Where-Object { $_.username -eq "doctor" } | Select-Object -First 1
-$profiles = (Call "Get" "$base/doctors/profiles/" $null $tokens["ADMIN"]).data.results
-$docProfile = $profiles | Where-Object { $_.user_id -eq $docUser.id } | Select-Object -First 1
+$profiles = (Call "Get" "$base/doctors/profiles/?user=$($docUser.id)" $null $tokens["ADMIN"]).data.results
+$docProfile = $profiles | Select-Object -First 1
 if (-not $docProfile) {
-    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-RBAC-1"; contact_phone="+1-555-3000" }) $tokens["ADMIN"]
+    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-RBAC-1"; contact_phone="8095553000" }) $tokens["ADMIN"]
     $docProfile = $dp.data
 }
 $docProfileId = $docProfile.id
@@ -91,10 +115,10 @@ $matrix = @(
 )
 
 $payloads = @{
-    "patients/" = @{ first_name="Test"; last_name="Case"; birth_date="1980-01-01"; gender="MALE"; phone="+1-555-0199"; email="tc@example.com" }
+    "patients/" = @{ first_name="Test"; last_name="Case"; birth_date="1980-01-01"; gender="MALE"; phone="8095550199"; email="tc@example.com" }
     "medical-records/" = @{ patient=$patId; title="QA record"; diagnosis="QA test"; treatment="none" }
     "appointments/" = @{ patient=$patId; doctor=$docProfileId; date_time="2026-09-01T10:00:00Z"; reason="QA appointment" }
-    "centers/" = @{ name="QA Center $runId"; code="QAC$runId"; address="1 QA Rd"; phone="+1-555-6000" }
+    "centers/" = @{ name="QA Center $runId"; code="QAC$runId"; address="1 QA Rd"; phone="8095556000" }
     "medicines/" = @{ generic_name="ParaQA-$runId"; commercial_name="QAcol"; concentration="500 mg" }
 }
 
@@ -129,8 +153,8 @@ Write-Output "=== PII masking by role (H-04) ==="
 # IT, CENTER_MANAGER -> masked; DOCTOR, NURSE, ADMIN, RECEPTIONIST -> full
 function Test-Masking($roleKey, $expectFull) {
     $d = (Call "Get" "$base/patients/$patId/" $null $tokens[$roleKey]).data
-    $masked = ($d.phone -ne "+1-555-0100") -and ($d.email -ne "ana.perez@example.com") -and ($d.address -ne "123 Main St, Springfield")
-    $full = ($d.phone -eq "+1-555-0100") -and ($d.email -eq "ana.perez@example.com") -and ($d.address -eq "123 Main St, Springfield")
+    $masked = ($d.phone -ne "8095550100") -and ($d.email -ne "ana.perez@example.com") -and ($d.address -ne "123 Main St, Springfield")
+    $full = ($d.phone -eq "8095550100") -and ($d.email -eq "ana.perez@example.com") -and ($d.address -eq "123 Main St, Springfield")
     if ($expectFull) { return $full }
     return $masked
 }
@@ -157,12 +181,16 @@ Write-Output ("schema anon={0} (exp 401) docs anon={1} (exp 401) schema admin={2
 $schemaOk = ($schemaAnon -eq 401) -and ($docsAnon -eq 401) -and ($schemaAdm -eq 200) -and ($docsAdm -eq 200) -and ($schemaIt -eq 200) -and ($docsIt -eq 200)
 Write-Output ("schema/docs gating: {0}" -f $(if ($schemaOk) { "PASS" } else { "FAIL" }))
 
-Write-Output "=== JWT refresh rotation + blacklist ==="
+Write-Output "=== JWT refresh rotation + blacklist (httpOnly cookie) ==="
 $lr = Login "admin" "AdminPass123!"
-$r2 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $lr.data.refresh }) $null
-Write-Output ("rotate refresh -> {0}, new refresh issued: {1}" -f $r2.status, [bool]$r2.data.refresh)
-$r3 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $lr.data.refresh }) $null
-Write-Output ("reuse old refresh -> {0} (expect 401 blacklist)" -f $r3.status)
+$authUri = "$base/auth/"
+$oldCookie = ($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" }).Value
+$r2 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr.session
+$newCookie = ($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" }).Value
+Write-Output ("rotate refresh via cookie -> {0}, access issued: {1}, cookie rotated: {2}" -f $r2.status, [bool]$r2.data.access, ($newCookie -ne $oldCookie))
+$lr.session.Cookies.SetCookies($authUri, "mc_refresh=$oldCookie")
+$r3 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr.session
+Write-Output ("reuse old cookie -> {0} (expect 401 blacklist)" -f $r3.status)
 
 Write-Output "=== Security basics ==="
 $anon = Call "Get" "$base/patients/" $null $null
@@ -173,7 +201,13 @@ Write-Output ("bad login -> {0} (expect 401)" -f $bad.status)
 Write-Output "=== Login throttle (expect 429) ==="
 $throttled = $false
 for ($i = 0; $i -lt 12; $i++) {
-    $r = Login "throttleuser$i" "wrongpass"
-    if ($r.status -eq 429) { $throttled = $true; Write-Output "got 429 after $($i + 1) rapid attempts"; break }
+    # raw request, no Login retry: the helper's 429-backoff would hide the throttle
+    try {
+        Invoke-RestMethod -Uri "$base/auth/login/" -Method Post -Headers @{ "Content-Type" = "application/json" } -Body (Body @{ username="throttleuser$i"; password="wrongpass" }) | Out-Null
+    } catch {
+        $sc = 0
+        try { $sc = [int]$_.Exception.Response.StatusCode } catch {}
+        if ($sc -eq 429) { $throttled = $true; Write-Output "got 429 after $($i + 1) rapid attempts"; break }
+    }
 }
 Write-Output ("throttle enforced: {0}" -f $throttled)

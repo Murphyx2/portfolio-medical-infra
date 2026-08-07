@@ -8,12 +8,13 @@ $results = @()
 Write-Output "  waiting 65s for login-throttle window reset before role logins..."
 Start-Sleep -Seconds 65
 
-function Call($method, $url, $body, $token) {
+function Call($method, $url, $body, $token, $session) {
     $headers = @{ "Content-Type" = "application/json" }
     if ($token) { $headers["Authorization"] = "Bearer $token" }
     try {
         $params = @{ Uri = $url; Method = $method; Headers = $headers; UseBasicParsing = $true }
         if ($body) { $params["Body"] = $body }
+        if ($session) { $params["WebSession"] = $session }
         $resp = Invoke-WebRequest @params
         $data = $null
         try { $data = $resp.Content | ConvertFrom-Json } catch { $data = $resp.Content }
@@ -26,7 +27,22 @@ function Call($method, $url, $body, $token) {
     }
 }
 function Body($o) { return ($o | ConvertTo-Json -Depth 6) }
-function Login($u, $p) { return Call "Post" "$base/auth/login/" (Body @{ username=$u; password=$p }) $null }
+function Login($u, $p) {
+    # httpOnly refresh cookie (H-03): capture the Set-Cookie session so
+    # /auth/token/refresh/ and /auth/logout/ can be exercised cookie-first.
+    $headers = @{ "Content-Type" = "application/json" }
+    try {
+        $resp = Invoke-WebRequest -Uri "$base/auth/login/" -Method Post -Headers $headers -Body (Body @{ username=$u; password=$p }) -UseBasicParsing -SessionVariable s
+        $data = $null
+        try { $data = $resp.Content | ConvertFrom-Json } catch { $data = $resp.Content }
+        return @{ ok = $true; status = [int]$resp.StatusCode; data = $data; session = $s; detail = $null }
+    } catch {
+        $sc = 0; $detail = $null
+        try { $sc = [int]$_.Exception.Response.StatusCode } catch {}
+        try { $detail = $_.ErrorDetails.Message } catch {}
+        return @{ ok = $false; status = $sc; data = $null; session = $null; detail = $detail }
+    }
+}
 function Report($name, $ok, $evidence) {
     $tag = if ($ok) { "PASS" } else { "FAIL" }
     $script:results += @{ name=$name; ok=$ok }
@@ -37,15 +53,15 @@ function Report($name, $ok, $evidence) {
 # PHASE 1: logins (ONCE per role, reuse tokens - stay under 10/min throttle)
 # ---------------------------------------------------------------
 Write-Output "=== PHASE 1: Login ==="
-$tokens = @{}; $refresh = @{}
+$tokens = @{}
 $lg = Login "admin" "AdminPass123!"
-$tokens["ADMIN"] = $lg.data.access; $refresh["ADMIN"] = $lg.data.refresh
+$tokens["ADMIN"] = $lg.data.access
 Report "login admin" ($lg.status -eq 200) "status=$($lg.status)"
 $roleUsers = @{ DOCTOR="doctor"; RECEPTIONIST="receptionist"; NURSE="nurse"; IT="it"; CENTER_MANAGER="cm" }
 foreach ($r in $roleUsers.GetEnumerator()) {
     $l = Login $r.Value "Pass123!x"
-    $tokens[$r.Key] = $l.data.access; $refresh[$r.Key] = $l.data.refresh
-    Report ("login " + $r.Value) ($l.status -eq 200) "status=$($l.status) hasAccess=$([bool]$l.data.access) hasRefresh=$([bool]$l.data.refresh)"
+    $tokens[$r.Key] = $l.data.access
+    Report ("login " + $r.Value) ($l.status -eq 200) "status=$($l.status) hasAccess=$([bool]$l.data.access) hasRefreshInBody=$([bool]$l.data.refresh)"
 }
 
 # ---------------------------------------------------------------
@@ -182,25 +198,32 @@ Report "cleanup: delete PII-test patient" ($del2.status -eq 204) "status=$($del2
 # ---------------------------------------------------------------
 # PHASE 6: JWT rotation + logout blacklist
 # ---------------------------------------------------------------
-Write-Output "=== PHASE 6: JWT ==="
+Write-Output "=== PHASE 6: JWT (httpOnly cookie) ==="
+$authUri = "$base/auth/"
 $lr = Login "admin" "AdminPass123!"
-$jwtHasBoth = ($lr.status -eq 200) -and [bool]$lr.data.access -and [bool]$lr.data.refresh
-Report "JWT login returns access+refresh" $jwtHasBoth "status=$($lr.status)"
+$jwtHasBoth = ($lr.status -eq 200) -and [bool]$lr.data.access -and (-not [bool]$lr.data.refresh) -and [bool]($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" })
+Report "JWT login: access in body, refresh only in httpOnly cookie" $jwtHasBoth "status=$($lr.status) access=$([bool]$lr.data.access) refreshInBody=$([bool]$lr.data.refresh)"
+$oldCookie = ($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" }).Value
 
-$r2 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $lr.data.refresh }) $null
-Report "JWT refresh rotates (issues new pair)" (($r2.status -eq 200) -and [bool]$r2.data.access -and [bool]$r2.data.refresh) "status=$($r2.status) newRefresh=$([bool]$r2.data.refresh)"
+$r2 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr.session
+$newCookie = ($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" }).Value
+Report "JWT refresh via cookie rotates (new access + rotated cookie)" (($r2.status -eq 200) -and [bool]$r2.data.access -and ($newCookie -and $newCookie -ne $oldCookie)) "status=$($r2.status) access=$([bool]$r2.data.access) rotated=$($newCookie -ne $oldCookie)"
 
-$r3 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $lr.data.refresh }) $null
-Report "JWT old refresh rejected after rotation (401)" ($r3.status -eq 401) "status=$($r3.status) detail=$($r3.detail)"
+$lr.session.Cookies.SetCookies($authUri, "mc_refresh=$oldCookie")
+$r3 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr.session
+Report "JWT old cookie rejected after rotation (401)" ($r3.status -eq 401) "status=$($r3.status) detail=$($r3.detail)"
 
-$logout = Call "Post" "$base/auth/logout/" (Body @{ refresh = $r2.data.refresh }) $lr.data.access
-Report "JWT logout returns 204" ($logout.status -eq 204) "status=$($logout.status)"
+# logout: blacklist the cookie's refresh + clear it
+$lr2 = Login "admin" "AdminPass123!"
+$logout = Call "Post" "$base/auth/logout/" "{}" $lr2.data.access $lr2.session
+$cookieAfterLogout = @($lr2.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" -and $_.Value })
+Report "JWT logout via cookie returns 204 + clears cookie" (($logout.status -eq 204) -and ($cookieAfterLogout.Count -eq 0)) "status=$($logout.status) cookiePresentAfter=$($cookieAfterLogout.Count)"
 
-$meAfterLogout = Call "Get" "$base/auth/me/" $null $r2.data.access
-Report "JWT refresh rejected after logout (401 blacklist)" ($meAfterLogout.status -eq 200 -and $null -ne $meAfterLogout.data) "note: access token is stateless (SimpleJWT); logout revokes refresh only; /auth/me/ with access -> $($meAfterLogout.status)"
+$meAfterLogout = Call "Get" "$base/auth/me/" $null $lr2.data.access $null
+Report "access token still valid after logout (refresh-only revocation)" ($meAfterLogout.status -eq 200 -and $null -ne $meAfterLogout.data) "note: access is stateless (SimpleJWT); logout revokes refresh only; /auth/me/ with access -> $($meAfterLogout.status)"
 
-$r4 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $r2.data.refresh }) $null
-Report "JWT refresh rejected after logout (401)" ($r4.status -eq 401) "status=$($r4.status)"
+$r4 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr2.session
+Report "JWT refresh after logout rejected (401)" ($r4.status -eq 401) "status=$($r4.status)"
 
 # ---------------------------------------------------------------
 # PHASE 7: Login throttle (wait for window reset, then rapid attempts)

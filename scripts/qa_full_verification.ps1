@@ -5,9 +5,9 @@ $ErrorActionPreference = "Stop"
 $base = "http://localhost:8000/api"
 $results = @()
 
-function Call($method, $url, $body, $token, $contentType = "application/json") {
+function Call($method, $url, $body, $token, $session) {
     $headers = @{}
-    if ($contentType) { $headers["Content-Type"] = $contentType }
+    $headers["Content-Type"] = "application/json"
     if ($token) { $headers["Authorization"] = "Bearer $token" }
     try {
         $params = @{
@@ -17,6 +17,7 @@ function Call($method, $url, $body, $token, $contentType = "application/json") {
             UseBasicParsing = $true
         }
         if ($body) { $params["Body"] = $body }
+        if ($session) { $params["WebSession"] = $session }
         $resp = Invoke-WebRequest @params
         $data = $null
         try { $data = $resp.Content | ConvertFrom-Json } catch { $data = $resp.Content }
@@ -31,7 +32,32 @@ function Call($method, $url, $body, $token, $contentType = "application/json") {
 }
 function Body($o) { return ($o | ConvertTo-Json -Depth 6) }
 function Login($u, $p) {
-    return Call "Post" "$base/auth/login/" (Body @{ username=$u; password=$p }) $null
+    # httpOnly refresh cookie (H-03): capture the Set-Cookie session so
+    # /auth/token/refresh/ and /auth/logout/ can be exercised cookie-first.
+    $headers = @{ "Content-Type" = "application/json" }
+    # login is throttled at 10/min per IP: retry with a backoff so this script
+    # stays green even when run right after another QA script.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            $resp = Invoke-WebRequest -Uri "$base/auth/login/" -Method Post -Headers $headers -Body (Body @{ username=$u; password=$p }) -UseBasicParsing -SessionVariable s
+            $data = $null
+            try { $data = $resp.Content | ConvertFrom-Json } catch { $data = $resp.Content }
+            return @{ ok = $true; status = [int]$resp.StatusCode; data = $data; session = $s; detail = $null }
+        } catch {
+            $sc = 0
+            try { $sc = [int]$_.Exception.Response.StatusCode } catch {}
+            if ($sc -eq 429 -and $attempt -lt 3) {
+                $wait = 30
+                try {
+                    $m = [regex]::Match($_.ErrorDetails.Message, "en (\d+) segundos")
+                    if ($m.Success) { $wait = [int]$m.Groups[1].Value + 3 }
+                } catch {}
+                Start-Sleep -Seconds $wait
+                continue
+            }
+            return @{ ok = $false; status = $sc; data = $null; session = $null; detail = $null }
+        }
+    }
 }
 function Report($name, $ok, $evidence) {
     $tag = if ($ok) { "PASS" } else { "FAIL" }
@@ -45,35 +71,32 @@ function Report($name, $ok, $evidence) {
 # ---------------------------------------------------------------
 Write-Output "=== PHASE A: RBAC matrix ==="
 $tokens = @{}
-$refreshTokens = @{}
 $adminLogin = Login "admin" "AdminPass123!"
 $tokens["ADMIN"] = $adminLogin.data.access
-$refreshTokens["ADMIN"] = $adminLogin.data.refresh
 Report "login:admin" ($adminLogin.status -eq 200) "status=$($adminLogin.status)"
 
 $roleUsers = @{ DOCTOR="doctor"; RECEPTIONIST="receptionist"; NURSE="nurse"; IT="it"; CENTER_MANAGER="cm" }
 foreach ($r in $roleUsers.GetEnumerator()) {
     # Ensure the user exists (ignore errors if already exists)
     $b = Body @{ username=$r.Value; email="$($r.Value)@example.com"; password="Pass123!x"; role=$r.Key; first_name=$r.Value }
-    $c = Call "Post" "$base/auth/users/" $b $tokens["ADMIN"]
+    $c = Call "Post" "$base/auth/users/" $b $tokens["ADMIN"] $null
     Write-Output ("  ensure user {0} -> {1}" -f $r.Value, $c.status)
 }
 foreach ($r in $roleUsers.GetEnumerator()) {
     $lg = Login $r.Value "Pass123!x"
     $tokens[$r.Key] = $lg.data.access
-    $refreshTokens[$r.Key] = $lg.data.refresh
     Report ("login:" + $r.Value) ($lg.status -eq 200) "status=$($lg.status)"
 }
 
 # Create a patient as receptionist (for payloads + PII checks)
-$patBody = Body @{ first_name="Ana"; last_name="Perez"; birth_date="1990-05-14"; gender="FEMALE"; phone="+1-555-0100"; address="123 Main St, Springfield"; email="ana.perez@example.com" }
+$patBody = Body @{ first_name="Ana"; last_name="Perez"; birth_date="1990-05-14"; gender="FEMALE"; phone="8095550100"; address="123 Main St, Springfield"; email="ana.perez@example.com" }
 $pat = Call "Post" "$base/patients/" $patBody $tokens["RECEPTIONIST"]
 Report "patient create (receptionist)" ($pat.status -eq 201) "status=$($pat.status)"
 $patId = $pat.data.id
 
 # Ensure center + medicine (admin) for appointment/record payloads - use unique names to avoid collisions
 $stamp = Get-Date -Format "HHmmss"
-$center = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $stamp"; code="CC$stamp"; address="Av. Principal 100"; phone="+1-555-2000" }) $tokens["ADMIN"]
+$center = Call "Post" "$base/centers/" (Body @{ name="Central Clinic $stamp"; code="CC$stamp"; address="Av. Principal 100"; phone="8095552000" }) $tokens["ADMIN"]
 $med = Call "Post" "$base/medicines/" (Body @{ generic_name="Paracetamol$stamp"; commercial_name="Tylenol$stamp"; concentration="500 mg" }) $tokens["ADMIN"]
 Report "center create (admin)" ($center.status -eq 201) "status=$($center.status)"
 Report "medicine create (admin)" ($med.status -eq 201) "status=$($med.status)"
@@ -143,15 +166,15 @@ $matrix = @(
 )
 
 # resolve a real doctor profile id for appointment/schedule/binding payloads
-$usersList = (Invoke-RestMethod -Uri "$base/auth/users/" -Headers @{Authorization="Bearer $($tokens['ADMIN'])"}).results
+$usersList = (Invoke-RestMethod -Uri "$base/auth/users/?search=doctor" -Headers @{Authorization="Bearer $($tokens['ADMIN'])"}).results
 $docUser = $usersList | Where-Object { $_.username -eq "doctor" } | Select-Object -First 1
-$docProfile = (Invoke-RestMethod -Uri "$base/doctors/profiles/" -Headers @{Authorization="Bearer $($tokens['ADMIN'])"}).results |
-    Where-Object { $_.user_id -eq $docUser.id } | Select-Object -First 1
+$docProfile = (Invoke-RestMethod -Uri "$base/doctors/profiles/?user=$($docUser.id)" -Headers @{Authorization="Bearer $($tokens['ADMIN'])"}).results |
+    Select-Object -First 1
 $matrixDoctorProfileId = if ($docProfile) { $docProfile.id } else { 1 }
 
 $rowN = 0
 $payloads = @{
-    "patients/" = @{ first_name="RBAC"; last_name="Patient"; birth_date="1980-01-01"; gender="MALE"; phone="+1-555-0199"; email="rbac@example.com" }
+    "patients/" = @{ first_name="RBAC"; last_name="Patient"; birth_date="1980-01-01"; gender="MALE"; phone="8095550199"; email="rbac@example.com" }
     "medical-records/" = @{ patient=$patId; title="QA record $stamp"; diagnosis="QA test"; treatment="none" }
     "appointments/" = @{ patient=$patId; doctor=$matrixDoctorProfileId; date_time="2026-09-01T10:00:00Z"; notes="QA appointment" }
     "consultation-logs/" = @{ patient=$patId; subjective="S"; objective="O"; assessment="A"; plan="P" }
@@ -180,10 +203,10 @@ foreach ($m in $matrix) {
             # fresh user + license per row so ADMIN and IT rows never collide
             # (a second profile for the same user now correctly returns 400)
             $profileUser = Call "Post" "$base/auth/users/" (Body @{ username="prow_${stamp}_$rowN"; password="Pass123!x"; role="DOCTOR"; first_name="Prof" }) $tok
-            $body = Body @{ user=$profileUser.data.id; specialty="Cardiology"; license_number="LIC-${stamp}-$rowN"; contact_phone="+1-555-8888" }
+            $body = Body @{ user=$profileUser.data.id; specialty="Cardiology"; license_number="LIC-${stamp}-$rowN"; contact_phone="8095558888" }
         } elseif ($m.url -match "/centers/") {
             # unique code per row (ADMIN and IT both POST centers)
-            $body = Body @{ name="QA Center ${stamp}_$rowN"; code="QAC${stamp}_$rowN"; address="1 QA Rd"; phone="+1-555-7777" }
+            $body = Body @{ name="QA Center ${stamp}_$rowN"; code="QAC${stamp}_$rowN"; address="1 QA Rd"; phone="8095557777" }
         } elseif ($m.url -match "/medicines/") {
             # unique medicine per row (ADMIN and IT both POST medicines)
             $body = Body @{ generic_name="ParaQA${stamp}_$rowN"; commercial_name="QAcol${stamp}_$rowN"; concentration="500 mg" }
@@ -207,10 +230,10 @@ $itPat = Call "Get" "$base/patients/$patId/" $null $tokens["IT"]
 $docPat = Call "Get" "$base/patients/$patId/" $null $tokens["DOCTOR"]
 $cmPat = Call "Get" "$base/patients/$patId/" $null $tokens["CENTER_MANAGER"]
 $recPat = Call "Get" "$base/patients/$patId/" $null $tokens["RECEPTIONIST"]
-$itMasked = ($itPat.data.phone -notmatch "\+1-555-0100") -and ($itPat.data.phone -ne "+1-555-0100") -and ($itPat.data.email -ne "ana.perez@example.com")
-$docFull = ($docPat.data.phone -eq "+1-555-0100") -and ($docPat.data.email -eq "ana.perez@example.com")
-$cmMasked = ($cmPat.data.phone -ne "+1-555-0100") -and ($cmPat.data.email -ne "ana.perez@example.com")
-$recFull = ($recPat.data.phone -eq "+1-555-0100") -and ($recPat.data.email -eq "ana.perez@example.com")
+$itMasked = ($itPat.data.phone -notmatch "8095550100") -and ($itPat.data.phone -ne "8095550100") -and ($itPat.data.email -ne "ana.perez@example.com")
+$docFull = ($docPat.data.phone -eq "8095550100") -and ($docPat.data.email -eq "ana.perez@example.com")
+$cmMasked = ($cmPat.data.phone -ne "8095550100") -and ($cmPat.data.email -ne "ana.perez@example.com")
+$recFull = ($recPat.data.phone -eq "8095550100") -and ($recPat.data.email -eq "ana.perez@example.com")
 Report "PII: IT masked" $itMasked ("IT phone={0} email={1}" -f $itPat.data.phone, $itPat.data.email)
 Report "PII: doctor full" $docFull ("DOC phone={0} email={1}" -f $docPat.data.phone, $docPat.data.email)
 Report "PII: center_manager masked" $cmMasked ("CM phone={0} email={1}" -f $cmPat.data.phone, $cmPat.data.email)
@@ -225,23 +248,23 @@ Write-Output "=== PHASE C: E2E smoke ==="
 $adminTok = $tokens["ADMIN"]; $recepTok = $tokens["RECEPTIONIST"]; $docTok = $tokens["DOCTOR"]
 
 # doctor user id (for profile creation)
-$users = (Call "Get" "$base/auth/users/" $null $adminTok).data.results
+$users = (Call "Get" "$base/auth/users/?search=doctor" $null $adminTok).data.results
 $docUser = $users | Where-Object { $_.username -eq "doctor" } | Select-Object -First 1
 $dp = $null
 # reuse an existing profile for the doctor if present, else create
-$existingProfiles = (Call "Get" "$base/doctors/profiles/" $null $adminTok).data.results
-$existing = $existingProfiles | Where-Object { $_.user_id -eq $docUser.id } | Select-Object -First 1
+$existingProfiles = (Call "Get" "$base/doctors/profiles/?user=$($docUser.id)" $null $adminTok).data.results
+$existing = $existingProfiles | Select-Object -First 1
 if ($existing) {
     $doctorProfileId = $existing.id
     Report "doctor profile reuse" $true "id=$doctorProfileId"
 } else {
-    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-E2E-$stamp"; contact_phone="+1-555-3000" }) $adminTok
+    $dp = Call "Post" "$base/doctors/profiles/" (Body @{ user=$docUser.id; specialty="Cardiology"; license_number="LIC-E2E-$stamp"; contact_phone="8095553000" }) $adminTok
     $doctorProfileId = $dp.data.id
     Report "doctor profile create" ($dp.status -eq 201) "status=$($dp.status) id=$doctorProfileId"
 }
 
 # patient (receptionist) - unique email
-$e2ePat = Call "Post" "$base/patients/" (Body @{ first_name="E2E"; last_name="Patient$stamp"; birth_date="1990-05-14"; gender="FEMALE"; phone="+1-555-0101"; address="456 Elm St"; email="e2e$stamp@example.com" }) $recepTok
+$e2ePat = Call "Post" "$base/patients/" (Body @{ first_name="E2E"; last_name="Patient$stamp"; birth_date="1990-05-14"; gender="FEMALE"; phone="8095550101"; address="456 Elm St"; email="e2e$stamp@example.com" }) $recepTok
 Report "e2e patient create" ($e2ePat.status -eq 201) "status=$($e2ePat.status)"
 $e2ePatId = $e2ePat.data.id
 
@@ -298,18 +321,20 @@ Report "e2e list endpoints 200" (($patsList -eq 200) -and ($apptsList -eq 200) -
 # ---------------------------------------------------------------
 # PHASE D: JWT rotation + blacklist
 # ---------------------------------------------------------------
-Write-Output "=== PHASE D: JWT rotation + blacklist ==="
+Write-Output "=== PHASE D: JWT rotation + blacklist (httpOnly cookie) ==="
 $lr = Login "admin" "AdminPass123!"
-$r2 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $lr.data.refresh }) $null
-$rotated = ($r2.status -eq 200) -and [bool]$r2.data.refresh -and [bool]$r2.data.access
-Report "JWT refresh rotate issues new tokens" $rotated "status=$($r2.status) newRefresh=$([bool]$r2.data.refresh)"
-$r3 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $lr.data.refresh }) $null
-Report "JWT old refresh blacklisted after rotation" ($r3.status -eq 401) "status=$($r3.status) detail=$($r3.detail)"
-$r4 = Call "Post" "$base/auth/token/refresh/" (Body @{ refresh = $r2.data.refresh }) $null
-Report "JWT new refresh still valid" ($r4.status -eq 200) "status=$($r4.status)"
+$authUri = "$base/auth/"
+$oldCookie = ($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" }).Value
+$r2 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr.session
+$newCookie = ($lr.session.Cookies.GetCookies($authUri) | Where-Object { $_.Name -eq "mc_refresh" }).Value
+$rotated = ($r2.status -eq 200) -and [bool]$r2.data.access -and ($newCookie -and $newCookie -ne $oldCookie)
+Report "JWT refresh via cookie issues new access + rotated cookie" $rotated "status=$($r2.status) access=$([bool]$r2.data.access) rotated=$($newCookie -ne $oldCookie)"
+$lr.session.Cookies.SetCookies($authUri, "mc_refresh=$oldCookie")
+$r3 = Call "Post" "$base/auth/token/refresh/" "{}" $null $lr.session
+Report "JWT old cookie blacklisted after rotation" ($r3.status -eq 401) "status=$($r3.status) detail=$($r3.detail)"
 
 # access token usable
-$me = Call "Get" "$base/auth/me/" $null $lr.data.access
+$me = Call "Get" "$base/auth/me/" $null $lr.data.access $null
 Report "JWT access token valid for /auth/me/" ($me.status -eq 200) "status=$($me.status)"
 
 # ---------------------------------------------------------------
@@ -320,8 +345,8 @@ Write-Output "=== PHASE E2: duplicate doctor-profile robustness ==="
 $adminTok2 = (Login "admin" "AdminPass123!").data.access
 $dupUser = Call "Post" "$base/auth/users/" (Body @{ username="dup$stamp"; password="Pass123!x"; role="DOCTOR"; first_name="Dup"; last_name="User" }) $adminTok2
 $dupUserId = $dupUser.data.id
-$firstProfile = Call "Post" "$base/doctors/profiles/" (Body @{ user=$dupUserId; specialty="Cardiology"; license_number="LIC-DUP1-$stamp"; contact_phone="+1-555-7776" }) $adminTok2
-$dupProfile = Call "Post" "$base/doctors/profiles/" (Body @{ user=$dupUserId; specialty="Cardiology"; license_number="LIC-DUP2-$stamp"; contact_phone="+1-555-7776" }) $adminTok2
+$firstProfile = Call "Post" "$base/doctors/profiles/" (Body @{ user=$dupUserId; specialty="Cardiology"; license_number="LIC-DUP1-$stamp"; contact_phone="8095557776" }) $adminTok2
+$dupProfile = Call "Post" "$base/doctors/profiles/" (Body @{ user=$dupUserId; specialty="Cardiology"; license_number="LIC-DUP2-$stamp"; contact_phone="8095557776" }) $adminTok2
 Report "duplicate doctor profile: first create -> 201" ($firstProfile.status -eq 201) "got=$($firstProfile.status)"
 Report "duplicate doctor profile: second -> 400 (not 500)" ($dupProfile.status -eq 400) "got=$($dupProfile.status) detail=$($dupProfile.detail)"
 
@@ -347,8 +372,14 @@ Start-Sleep -Seconds 65
 $throttled = $false
 $first429 = $null
 for ($i = 1; $i -le 12; $i++) {
-    $r = Login "throttleuser$i" "wrongpass"
-    if ($r.status -eq 429) { $throttled = $true; $first429 = $i; break }
+    # raw request, no Login retry: the helper's 429-backoff would hide the throttle
+    try {
+        Invoke-WebRequest -Uri "$base/auth/login/" -Method Post -Headers @{ "Content-Type" = "application/json" } -Body (Body @{ username="throttleuser$i"; password="wrongpass" }) -UseBasicParsing | Out-Null
+    } catch {
+        $sc = 0
+        try { $sc = [int]$_.Exception.Response.StatusCode } catch {}
+        if ($sc -eq 429) { $throttled = $true; $first429 = $i; break }
+    }
 }
 Report "login throttle -> 429 after ~11 rapid attempts" ($throttled -and $first429 -ge 10) ("first429At={0} throttled={1}" -f $first429, $throttled)
 
