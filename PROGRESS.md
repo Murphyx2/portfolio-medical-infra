@@ -311,7 +311,7 @@ Everything below was verified against the live stack. All three repos are clean 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `9a40c3c`     |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `1e54a9c`     |
 | backend    | `backend/` (Django API)                                                                         | `3aa27ee`     |
 | frontend   | `frontend/` (React SPA)                                                                         | `16a30a7`     |
 
