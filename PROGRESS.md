@@ -250,6 +250,15 @@ Adding a patient with admin appeared impossible because backend validation 400s 
 - **NSS backend** — `validate_nss` NFKC-normalizes fullwidth digits, rejects letters/symbols/non-ASCII, enforces max 11 digits (previously accepted 12-digit and fullwidth values).
 - Verified: **146 pytest**, **16 vitest**, build clean; live: 12-digit → 400, fullwidth → stored ASCII, letters → 400.
 
+### 2026-08-06 — Pagination (backend + frontend) + read-only DB access
+New patients created via the form were invisible on the Patients page because the backend never honored `?page_size` and the frontend had no pagination UI. Fixed (backend `defadef`, frontend `5be9ae3`, infra `…`):
+- **Root cause** — `PageNumberPagination` with no `page_size_query_param` silently ignored the frontend's `?page_size=100`, so every list endpoint returned 20 rows and the frontend rendered only page 1 (patients sorted by `search_name` beyond row 20 were hidden).
+- **Backend** — new `apps/core/pagination.py::DefaultPagination` (`page_size=20`, `page_size_query_param="page_size"`, `max_page_size=200`); wired as `DEFAULT_PAGINATION_CLASS`.
+- **Frontend** — new `Pagination` component in `ui.tsx` (numbered pages + prev/next + "Página X de Y · N registros", ellipsis collapse, returns null when a single page) rendered **above and below** the table on all 7 list pages: Patients, Centers, Doctors, Medicines, Appointments, Records, Users.
+- **DB access** — read-only PostgreSQL role `db_reviewer` (SELECT only; writes denied) documented in `TEST_USERS.md`; PII stays Fernet-encrypted at rest.
+- **QA agent** — no application-code bugs; live 37/37 checks green (pagination, NSS, RBAC, masking, JWT rotation/blacklist, throttling 429 on 11th login). New **`infra/scripts/qa_live_verification.ps1`** supersedes the stale 8-digit-phone smoke scripts.
+- Verified: **150 pytest**, **21 vitest**, build clean; live `?page_size=100` → 100 results, page 2 → remainder.
+
 ---
 
 ## Current State (2026-08-06)
@@ -260,8 +269,8 @@ Everything below was verified against the live stack. All three repos are clean 
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
 | infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `26b7d9f`     |
-| backend    | `backend/` (Django API)                                                                         | `aa99fbe`     |
-| frontend   | `frontend/` (React SPA)                                                                         | `21dda54`     |
+| backend    | `backend/` (Django API)                                                                         | `defadef`     |
+| frontend   | `frontend/` (React SPA)                                                                         | `5be9ae3`     |
 
 ### Runbook
 - Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.

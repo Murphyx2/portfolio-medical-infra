@@ -20,6 +20,18 @@ These are local development accounts only — do not use outside the dev environ
 - Swagger / API docs: http://localhost:8000/api/docs/
 - API root: http://localhost:8000/api
 
+## Database access (manual inspection)
+
+Read-only PostgreSQL account for inspecting the database directly (psql / pgAdmin / DBeaver).
+
+| Host | Port | Database | User | Password |
+|------|------|----------|------|----------|
+| `127.0.0.1` | `5432` | `medicalconsultations` | `db_reviewer` | `a5C2ypLfDhsn1FElPuGANczi` |
+
+- **Read-only:** `CONNECT` + `SELECT` on all tables only; writes/deletes are denied.
+- PII columns (names, birth date, phone, address, email, cédula, NSS) are **Fernet-encrypted at rest** — manual DB reads show ciphertext, not plaintext. Use the web app to read PII.
+- Example: `docker exec -e PGPASSWORD=a5C2ypLfDhsn1FElPuGANczi mc_db psql -U db_reviewer -d medicalconsultations -c "SELECT count(*) FROM patients_patient;"`
+
 ## Notes
 
 - Extra ad-hoc users may exist in the DB from testing (`drdiaz`, `center`, etc.) — ignore them.
