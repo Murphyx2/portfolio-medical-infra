@@ -1,6 +1,14 @@
 # Project Agents
 
-This project has two specialized sub-agents configured for independent security scanning and QA verification. They are defined locally in `.claude/agents/` (not committed to git) and run autonomously.
+This project has two specialized sub-agents configured for independent security scanning and QA verification. Their instructions are defined locally in `.claude/agents/{security,qa}.md` (not committed to git).
+
+## ⚠️ Invocation mechanism (read this before assuming it "just works")
+
+This runtime does **not** support native custom `subagent_type` registration from `.claude/agents/*.md` — confirmed by testing: even an officially-installed Anthropic plugin agent (`agent-sdk-verifier-py`, under `~/.claude/plugins/marketplaces/.../agents/`) does not appear in this session's available-agent list (`claude`, `claude-code-guide`, `Explore`, `general-purpose`, `Plan`, `statusline-setup` — a fixed set). This isn't a frontmatter bug; the dispatcher here just doesn't consult those files dynamically.
+
+**Working mechanism:** the main agent reads the full content of `.claude/agents/security.md` or `.claude/agents/qa.md` and passes it *as the prompt itself* to `Agent(subagent_type: "general-purpose", ...)`. Since a fresh `general-purpose` agent starts with zero context, embedding the whole mission brief in the prompt reproduces the same behavior a native named sub-agent would have — it's just wired through the prompt instead of a registry lookup. `general-purpose` has unrestricted tool access (`Tools: *`), which covers everything both agents need (Read/Grep/Glob/Bash/Write/Edit).
+
+**Practical effect for you:** none — the trigger phrases below still work exactly the same. This section is here so a future continuation agent doesn't waste a session re-discovering that native registration is a dead end in this environment.
 
 ## Security Agent
 
@@ -139,11 +147,12 @@ The agent will run all checks and report results. No approval needed — you'll 
 ## For Future Continuation
 
 If another Claude instance takes over this project:
-1. These two agent definitions are in `.claude/agents/` (local, not git-tracked).
+1. These two agent definitions are in `.claude/agents/` (local, not git-tracked) — treat them as **prompt templates to embed**, not as registrable subagent types. See the invocation-mechanism note above before trying `subagent_type: "security"` or `"qa"` directly — it will fail with "Agent type not found."
 2. They are project-aware: read `infra/PROGRESS.md` for context, aware of the current test counts and recent changes.
 3. Severity tiers (CRITICAL/HIGH/MEDIUM/LOW/INFO) are the currency for prioritizing security fixes.
 4. QA autonomy is intentional: tests are cheap to run and safe to add; the main agent calls QA after changes land.
 5. **Never override without consensus:** If a future agent wants to change agent behavior (e.g., approval gates, baselines), discuss with the project stakeholders (you) first.
+6. If a future session finds that native `.claude/agents/*.md` registration *does* work (e.g., the harness was upgraded), that's a strict improvement — switch to `subagent_type: "security"`/`"qa"` directly and drop the prompt-embedding workaround.
 
 ---
 
