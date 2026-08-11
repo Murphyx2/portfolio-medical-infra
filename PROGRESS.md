@@ -361,7 +361,7 @@ Everything below was verified against the live stack. All three repos are clean 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | this commit (PROGRESS.md update) |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `0dbbab5`     |
 | backend    | `backend/` (Django API)                                                                         | `30a8c50` (merge of `perf/caching-and-query-opts`, tip `824410f`) |
 | frontend   | `frontend/` (React SPA)                                                                         | `c8b64e8` (merge of `ux/impeccable-critique-fixes`, tip `bc9ba02`) |
 
