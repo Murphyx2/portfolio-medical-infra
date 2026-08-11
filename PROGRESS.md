@@ -295,35 +295,66 @@ New patients created via the form were invisible on the Patients page because th
 - **H-03 (shorten refresh window)** — `JWT_REFRESH_LIFETIME_DAYS` default and `infra/.env` set to **3** days (was 7); verified live (refresh `exp` = 3 days).
 - Verified: **197 pytest** (176 + 19 new M-fix tests + 1 last-4 index test; 2 search tests updated), **35 vitest**, build clean, backend recreated (migrations `0006`/`0007` applied incl. data backfill), frontend HTTP 200.
 
+### 2026-08-06 — H-03 follow-through: httpOnly refresh-token cookie (backend `012f2db`, frontend `0882194`, infra `cd7d9c5`)
+> Backfilled into this log — the code/commits predate this entry; PROGRESS.md itself was never updated at the time.
+- **Cookie-based refresh** — the SPA no longer holds the refresh token in `localStorage` (closes the "H-03 residual" item below). The access token stays **in memory only** (`services/api.ts` module state); the refresh token travels in an httpOnly, `SameSite=Strict`, path-scoped (`/api/auth/`) cookie set by the backend (`REFRESH_COOKIE_*` settings in `config/settings/base.py`), rotated on every `/api/auth/token/refresh/` call and cleared on logout.
+- **Backend** — login/refresh responses set/rotate the cookie server-side instead of returning the refresh token in the JSON body; logout blacklists the current refresh token and clears the cookie.
+- **Frontend** — `tryRefresh()` (single-flight, from the 2026-08-06 fix above) now calls `/api/auth/token/refresh/` with `credentials: "include"` and no request body; `setAccessToken`/`getAccessToken` are the only client-side token state.
+- **QA scripts** — all `infra/scripts/qa_*` updated to drive the cookie-based flow (session-based `Invoke-WebRequest`/`requests.Session` instead of reading a refresh token out of the JSON body) plus pagination-safe doctor lookups and login-throttle retry handling.
+- Verified live: httpOnly cookie set on login, rotates on refresh, reused-old-cookie → 401 (blacklisted), cleared on logout.
+
 ### Deferred — production hardening (recorded, no code changes)
 - **H-01** — dev compose publishes `0.0.0.0:8000/5173` with `DEBUG=true` and known default credentials (`admin/AdminPass123!`, role accounts `Pass123!x`). Bind to loopback + rotate creds before any non-local exposure.
-- **H-03 residual** — refresh token still in `localStorage`; httpOnly `Secure` `SameSite=Strict` cookie migration is the follow-up.
 - **M-06** — `react-router-dom@7.18.2` is in the GHSA-qwww-vcr4-c8h2 range, but the advisory only affects RSC mode and the app uses classic `BrowserRouter`; keep on v7 until the React ≥ 19.2.7 upgrade (see accepted risks).
 - **M-08** — prod compose ships a self-signed TLS cert together with `SECURE_HSTS_PRELOAD`; mount real CA certs before any public exposure.
 - **H-02 (reassessed, lower severity)** — the "committed PII key" was a **test-fixture key** in `settings/test.py` (pytest in-memory SQLite only); no persistent data was ever encrypted with it, so **no `reencrypt_pii` run is needed**. Optional git-history purge if the repo ever goes public.
 
+### 2026-08-10 — Performance pass: query optimization + Redis reference-list/schema caching + frontend list UX (backend `824410f` merged `30a8c50`, frontend `29d2def` merged `f1cbd35`)
+Worked on two branches (`backend: perf/caching-and-query-opts`, `frontend: perf/list-ux-improvements`), merged into `main` after unit tests + a full live-stack QA run. No infra changes.
+
+**Backend — query/perf fixes:**
+- `PatientViewSet`: `select_related("ars","ars_program","center")` (the serializer's `ars_name`/`ars_program_name`/`center_name` fields were causing N+1 queries); doctor center-scoping rewritten from a `.distinct()` + join to an `Exists()` subquery (no row multiplication, no `.distinct()` needed).
+- `patient_ids_matching_digits` (`apps/core/services.py`) now returns a lazy queryset (`values_list("id", flat=True)`) instead of a materialized Python list, so `id__in=patient_ids_matching_digits(term)` in `PatientSearchFilter`/`RecordSearchFilter` compiles to a single SQL subquery.
+- Encrypted-field orderings (`cedula`/`nss`/`phone`/`email`/`age`) are no longer sorted in Python on the backend — they were removed from `ordering_fields`, so DRF's `OrderingFilter` just ignores an `?ordering=` request for them and falls back to default ordering. **The frontend now sorts those 5 columns client-side** (see below) — this is a paired backend/frontend change, don't revert one side without the other.
+- New indexes: `MedicalRecord.date` / `ConsultationLog.date` (both default-order `-date` on every list; plain btree, both DB backends) — `records` migrations `0002`/`0003`. Postgres-only trigram GIN indexes on `Patient.search_name` and `MedicalRecord.title` (used with `__icontains` by the search filters) — `patients` migration `0008`, `records` migration `0003`; both are `RunPython` guarded on `schema_editor.connection.vendor != "postgresql"` (no-op on the SQLite test backend) and **deliberately not mirrored in `Meta.indexes`** (a `GinIndex` in `Meta.indexes` would break `migrate` on SQLite — schema editors don't skip index types they don't support, they just fail). Live-verified applying cleanly against real Postgres (`CREATE EXTENSION pg_trgm` + `CREATE INDEX ... USING gin`).
+- `CONN_MAX_AGE=60`, `GZipMiddleware`, Redis `KEY_PREFIX` + 1s socket timeouts (`config/settings/base.py`).
+
+**Backend — caching (design note for future continuation):** the original plan was to invalidate the cache from the DRF-only `AuditMixin` hook; **rejected during design review** because `MedicalCenterAdmin`/`MedicineAdmin`/`ARSAdmin`/`ARSProgramAdmin`/`DoctorCenterBindingAdmin` all use a *separate* `AuditModelAdmin` base (`apps/core/admin.py`) for Django-admin writes — an AuditMixin-only hook would leave the cache stale after any admin-panel edit. Built as `post_save`/`post_delete` signals instead (fires regardless of write path). Keep this in mind if refactoring cache invalidation again.
+- `apps/core/caching.py::CachedListViewMixin` — caches `list()` responses (Redis, 300s TTL, version-counter invalidation) for `MedicineViewSet`/`ARSViewSet`/`MedicalCenterViewSet`. Verified auth-agnostic (no per-role query scoping) before applying — do **not** apply this mixin to a viewset whose `get_queryset()` varies by user/role (e.g. `DoctorCenterBindingViewSet`, `PatientViewSet`) without re-checking that invariant.
+- `apps/core/signals.py::connect_cache_invalidation()` (wired from `CoreConfig.ready()`) — `post_save`/`post_delete` on `Medicine`/`ARS`/`ARSProgram`/`MedicalCenter`/`DoctorCenterBinding` bump the relevant Redis version counter.
+- `apps/core/views.py::CachedSpectacularAPIView` — caches the `/api/schema/` response (1h TTL) **inside `get()`**, not by wrapping the URL with Django's `cache_page`. This matters: `cache_page` around the whole view would intercept the request *before* DRF's `dispatch()` runs `check_permissions()`, so a cached admin response could leak to a non-admin/IT caller. Caching inside `get()` means the lookup only ever runs after `SERVE_PERMISSIONS` (`IsAdminOrIT`) has already passed. Live-verified: warming the cache as admin, then requesting as `doctor` still gets 403.
+- `tests/conftest.py` gained an autouse `cache.clear()` fixture — LocMemCache (the test cache backend) is **not** reset by pytest-django's per-test transaction rollback, so without this, caching state leaks across tests (surfaced as flaky/wrong row counts in unrelated tests that hit `/api/medicines/`, `/api/ars/`, `/api/centers/`).
+- New `tests/test_caching.py` (10 tests) + 2 new query-count regression tests in `tests/test_patients.py` (`CaptureQueriesContext`-based, assert query count doesn't scale with row count / doesn't duplicate rows).
+
+**Frontend:**
+- Records/Appointments/Doctors/Users: the combined `useEffect(() => { load(); api.get(dropdownData)... }, [load])` was refetching the dropdown/picker data (patients/doctors/centers/users/roles) on **every** page/sort/search change, since `load` is a `useCallback` that changes identity on those. Split into `useEffect(load, [load])` + a separate `useEffect(..., [])` that fetches the picker data once on mount. (`Patients.tsx` already had this split — a good reference for the shape.)
+- `Records.tsx::openDetail` — the record detail fetch and the consultation-logs fetch are independent (`await` then fire-and-forget), so they were running sequentially; parallelized with `Promise.all`. Record images get `loading="lazy"`.
+- `Patients.tsx` — client-side sort added for the 5 columns the backend no longer sorts (`phone`/`email`/`cedula`/`nss`/`age`): a local `clientSort` state + `handleColumnSort` wrapper that intercepts those 5 keys before they'd reach `useListControls`'s server-driven `handleSort` (which would otherwise send an inert `?ordering=` and reset to page 1 for nothing). Sorts only the **currently-loaded page** — this is a client-side per-page sort, not a full-dataset sort.
+- `Appointments.tsx` — patient picker changed from a `<select>` that preloaded 100 patients to the existing `SearchableSelect` component (same pattern `Records.tsx`'s record form already used).
+- Verified: **210 pytest** (backend), **36 vitest** (frontend), `tsc -b && vite build` clean, and a full live-stack QA run (`qa_e2e_verification.py` 175/175, `qa_integration_smoke.ps1` clean, `qa_full_verification.ps1` 92/92) after restarting the backend/frontend containers (bind-mounted, so `docker compose restart` was enough to pick up the code — but the 3 new migrations only apply at container **startup**, so a restart was required to actually run them against the live Postgres, not just a hot-reload).
+
 ---
 
-## Current State (2026-08-07)
+## Current State (2026-08-10)
 
-Everything below was verified against the live stack. All three repos are clean (`git status` empty).
+Everything below was verified against the live stack. All three repos are clean (`git status` empty), all on `main` (the two perf branches were merged with `--no-ff` and can be deleted).
 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `1e54a9c`     |
-| backend    | `backend/` (Django API)                                                                         | `3aa27ee`     |
-| frontend   | `frontend/` (React SPA)                                                                         | `16a30a7`     |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `cd7d9c5` + this doc update |
+| backend    | `backend/` (Django API)                                                                         | `30a8c50` (merge of `perf/caching-and-query-opts`, tip `824410f`) |
+| frontend   | `frontend/` (React SPA)                                                                         | `f1cbd35` (merge of `perf/list-ux-improvements`, tip `29d2def`) |
 
 ### Runbook
-- Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`.
-- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **197 passed**).
+- Start stack: `docker compose up -d` (run from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** (`docker compose restart backend`) — bind-mounted code hot-reloads, but `migrate` only runs at container startup, so new migrations won't apply to the live Postgres until you do.
+- Backend tests: `.\backend\.venv\Scripts\python.exe -m pytest` (run from `backend/`; expect **210 passed**).
 - Frontend build: `npm run build` (run from `frontend/`).
-- Frontend tests: `npm test` (vitest + RTL; expect **35 passed**).
+- Frontend tests: `npm test` (vitest + RTL; expect **36 passed**).
 - Swagger UI: http://localhost:8000/api/docs/ · OpenAPI schema: http://localhost:8000/api/schema/ · Health: http://localhost:8000/api/health/
 - App: http://localhost:5173 (login page) — Vite proxies `/api` and `/media` to the backend.
 - Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by the `cert-init` service; browser will warn until real certs are mounted).
-- Live QA smoke scripts (run from host): `.\scripts\qa_live_verification.ps1` is the **current** one (37/37). The older `qa_rbac_matrix.ps1`, `qa_full_verification.ps1`, `qa_integration_smoke.ps1`, and `qa_cedula_verification.ps1` predate the 10-digit phone / 11-digit-NSS validators (their setup payloads now 400) and report false failures — updating them is a tracked follow-up.
+- Live QA smoke scripts (run from host): `qa_full_verification.ps1` (92/92), `qa_integration_smoke.ps1`, and `backend\.venv\Scripts\python.exe infra\scripts\qa_e2e_verification.py` (175/175) were re-run against this state on 2026-08-10 and are green (`qa_rbac_matrix.ps1`, `qa_cedula_verification.ps1`, `qa_live_verification.ps1` were **not** re-run this pass — assume current but unverified). **Wait ~70s between runs** (see login-throttle pitfall below) — running them back-to-back in the same minute produces false failures from 429s, not real bugs.
 
 ### Known pitfalls (IMPORTANT for any continuation agent)
 - **Vite stale-cache on Docker bind-mount:** after changing frontend code or env, the container may keep serving old transformed modules. Root cause of the AuthProvider crash and the `ERR_NAME_NOT_RESOLVED` login bug. **Fix: recreate the container** — `docker compose up -d --force-recreate frontend` (or at least `up -d`), NOT plain `docker compose restart`.
@@ -332,6 +363,9 @@ Everything below was verified against the live stack. All three repos are clean 
 - **Login throttle race between smoke scripts:** the `login` throttle is 10/min per IP, and `qa_full_verification.ps1` deliberately fires ~11 rapid logins. Running the smoke scripts back-to-back within the same minute causes the next script's role logins to be 429-throttled (failures look like empty tokens / "bad_authorization_header"). **Wait ~70s between smoke script runs.**
 - **Postgres index vs. data migration:** encrypting existing rows (`patients 0004`) must run in a separate migration transaction from the `search_name` index (`0005`) — Postgres rejects `CREATE INDEX` on a table with pending trigger events. Keep this split if adding columns + backfills.
 - **PowerShell 5.1** (Windows host): no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe` and `Invoke-RestMethod`. For multipart uploads use `curl.exe -F` (no `Invoke-RestMethod -Form` in 5.1).
+- **Server-side caching + tests:** `apps/core/caching.py::CachedListViewMixin` (medicines/ARS/centers) and `CachedSpectacularAPIView` (schema) use the real Django cache (LocMemCache in tests), which pytest-django's per-test transaction rollback does **not** reset. `tests/conftest.py` has an autouse `clear_cache` fixture for this — if you add a new cached endpoint and see flaky/wrong counts in unrelated tests, this is almost certainly why (check the fixture is still running, not that it's a real bug).
+- **Postgres-only migrations:** the trigram GIN indexes (`patients/migrations/0008`, `records/migrations/0003`) are `RunPython` operations that check `schema_editor.connection.vendor` and no-op on SQLite — do **not** add a `GinIndex` directly to a model's `Meta.indexes`, it will break `migrate` on the SQLite test backend (the schema editor doesn't skip unsupported index types, it just emits invalid SQL for them).
+- **Cache invalidation must be signal-based, not `AuditMixin`-based:** `MedicalCenterAdmin`/`MedicineAdmin`/`ARSAdmin`/`ARSProgramAdmin`/`DoctorCenterBindingAdmin` write through `AuditModelAdmin` (Django admin), a *different* class from the DRF `AuditMixin` used by the API viewsets. Hooking cache invalidation into `AuditMixin` alone would silently miss every Django-admin edit. Use `post_save`/`post_delete` signals (`apps/core/signals.py`) for anything that needs to react to writes regardless of path.
 
 ### Environment
 - Windows host · Python 3.13.3 · Node 22.14.0 · Docker 29.6.1 + Compose v5.3.0 · git 2.45.1.
@@ -343,8 +377,8 @@ Everything below was verified against the live stack. All three repos are clean 
   - **`qa.md`** (mode: subagent) — independent QA runs, e.g. `subagent_type: "qa"`, prompt "run QA on the app". May write/update automated tests but must NOT modify application code — reports bugs for the main agent to fix.
   - **`security.md`** (mode: subagent) — independent security audits. New subagents need an opencode **restart** to load.
 
-### Accepted risks (current, 2026-08-07)
-- JWT tokens in `localStorage` (httpOnly `Secure` cookie migration is a follow-up).
+### Accepted risks (current, 2026-08-10)
+- ~~JWT tokens in `localStorage`~~ — resolved 2026-08-06 (H-03 httpOnly cookie migration, see Progress Log).
 - Non-doctor staff roles (receptionist/nurse/IT/CM) still see all centers (no user↔center visibility model for those roles).
 - Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
 - Prod TLS uses a self-signed cert (real certs must be mounted before public exposure).
@@ -362,9 +396,9 @@ What someone obtaining this document **and/or** the repos can and cannot do:
 - **Operational rule:** `.env` is the only secret store. If these repos are ever pushed to a public remote, treat all documented dev credentials as compromised, keep ports loopback-bound, and never commit `.env`.
 
 ## Suggested Next Steps (prioritized)
-1. **Security follow-ups (from the accepted-risk list):** move JWT refresh to an httpOnly `Secure` cookie flow (replaces `localStorage` tokens).
-2. **Activate CI:** push the three repos to GitHub (workflows in `infra/.github/workflows/` reference sibling repos `medicalconsultations-backend` / `medicalconsultations-frontend` under the same owner).
-3. **Non-doctor center scoping:** extend the patient `center` model decision to receptionists/nurses/center-managers (visible-center model for those roles).
-4. **Async layer:** add Celery on the existing Redis (appointment reminders/notifications, image processing).
-5. **Doctor↔center approval UI:** surface the `DoctorCenterBinding` approve/pending flow in the frontend.
-6. **Seed/demo data:** add a management command that loads sample centers, doctors, patients, medicines, appointments for a populated first run.
+1. ~~Activate CI~~ — done: the three repos are pushed to GitHub (`Murphyx2/MedicalConsultation-{backend,frontend,infra}`, all **private**). The `medicalconsultations-*` repo names referenced in `infra/.github/workflows/` may need updating to match if CI hasn't been re-verified against the new remote names/owner.
+2. **Non-doctor center scoping:** extend the patient `center` model decision to receptionists/nurses/center-managers (visible-center model for those roles).
+3. **Async layer:** add Celery on the existing Redis (appointment reminders/notifications, image processing) — note the cache DB (`redis://.../0`) is now also doing reference-list/schema caching (2026-08-10), not just throttling; give Celery its own DB index if added.
+4. **Doctor↔center approval UI:** surface the `DoctorCenterBinding` approve/pending flow in the frontend.
+5. **Seed/demo data:** add a management command that loads sample centers, doctors, patients, medicines, appointments for a populated first run.
+6. **Follow-ups from the 2026-08-10 perf pass:** rotate the `db_reviewer` Postgres password documented in `TEST_USERS.md` (flagged during a repo-privacy review — low urgency since the repos are private and the port is loopback-bound, but it's a live credential in a tracked file); consider whether Medicine/ARS `search_fields` (also `icontains`-based) would benefit from the same trigram-index treatment as `Patient.search_name`/`MedicalRecord.title` if those lists grow large enough to matter (both are already cached, so this is a `search=` latency concern, not a list-load one).
