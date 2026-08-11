@@ -342,7 +342,7 @@ Everything below was verified against the live stack. All three repos are clean 
 ### Repos & latest commits
 | Repo       | Path                                                                                            | Latest commit |
 |------------|-------------------------------------------------------------------------------------------------|---------------|
-| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `cd7d9c5` + this doc update |
+| infra      | `infra/` (compose, env, docs, CI, scripts)                                                      | `fdc7c80`     |
 | backend    | `backend/` (Django API)                                                                         | `30a8c50` (merge of `perf/caching-and-query-opts`, tip `824410f`) |
 | frontend   | `frontend/` (React SPA)                                                                         | `f1cbd35` (merge of `perf/list-ux-improvements`, tip `29d2def`) |
 
