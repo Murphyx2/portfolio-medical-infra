@@ -185,7 +185,7 @@ Verified against the live stack (soft-delete pass, 2026-08-12: full manual QA ag
 ### Repos & latest commits
 | Repo       | Path       | Latest commit |
 |------------|------------|----------------|
-| infra      | `infra/`   | this commit |
+| infra      | `infra/`   | `eac1b4a` |
 | backend    | `backend/` | `15215bf` (merge of `soft-delete/active-flag`, tip `90a065a`) |
 | frontend   | `frontend/`| `534580c` (merge of `soft-delete/active-flag`, tip `676bbd2`) |
 
