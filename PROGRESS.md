@@ -186,8 +186,11 @@ Verified against the live stack (soft-delete pass, 2026-08-12: full manual QA ag
 | Repo       | Path       | Latest commit |
 |------------|------------|----------------|
 | infra      | `infra/`   | `eac1b4a` |
-| backend    | `backend/` | `15215bf` (merge of `soft-delete/active-flag`, tip `90a065a`) |
-| frontend   | `frontend/`| `534580c` (merge of `soft-delete/active-flag`, tip `676bbd2`) |
+| backend    | `backend/` | `24737de` (merge of `fix/critique-p0-issues`, tip `e79914e`) |
+| frontend   | `frontend/`| `258c393` (merge of `fix/critique-p0-issues`, tip `ebb9e3d`) |
+
+### Design-system artifacts (project root, not in any of the 3 git repos)
+`PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten.
 
 ### Runbook
 - Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
