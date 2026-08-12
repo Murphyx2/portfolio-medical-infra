@@ -185,7 +185,7 @@ Verified against the live stack (soft-delete pass, 2026-08-12: full manual QA ag
 ### Repos & latest commits
 | Repo       | Path       | Latest commit |
 |------------|------------|----------------|
-| infra      | `infra/`   | `eac1b4a` |
+| infra      | `infra/`   | `2930547` |
 | backend    | `backend/` | `24737de` (merge of `fix/critique-p0-issues`, tip `e79914e`) |
 | frontend   | `frontend/`| `258c393` (merge of `fix/critique-p0-issues`, tip `ebb9e3d`) |
 
