@@ -178,23 +178,38 @@ Refresh token moved out of `localStorage` into an httpOnly, `SameSite=Strict`, p
 
 ---
 
-## Current State (as of 2026-08-12)
+## Current State (as of 2026-08-15)
 
-Verified against the live stack (soft-delete pass, 2026-08-12: full manual QA against real Postgres — cascade, restore, doctor-login-lock, Django-admin parity — not just pytest). All three repos clean, all on `main`.
+Architecture-review Cards P0+P1 and 2+4+5 are done, merged, deployed (backend `25e5dc1`, tests **355 passed**); Cards 6-10 are the remaining backlog (see "Architecture Review Cards" below). Docs updated (infra `29cb209`). Live-stack masking/scoping smoke-verified 2026-08-15 (admin full PII, IT/CM masked, receptionist M-03 doctor-contact, `active` read-only for non-admins, doctor scoped to own/centers).
 
 ### Repos & latest commits
 | Repo       | Path       | Latest commit |
 |------------|------------|----------------|
-| infra      | `infra/`   | `2930547` |
-| backend    | `backend/` | `24737de` (merge of `fix/critique-p0-issues`, tip `e79914e`) |
-| frontend   | `frontend/`| `258c393` (merge of `fix/critique-p0-issues`, tip `ebb9e3d`) |
+| infra      | `infra/`   | `29cb209` (architecture doc) |
+| backend    | `backend/` | `25e5dc1` (merge of `core-ownership-pass`: cards 2+4+5) |
+| frontend   | `frontend/`| `a3c4362` |
 
 ### Design-system artifacts (project root, not in any of the 3 git repos)
 `PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten.
 
+### Architecture Review Cards (2026-08-13 risk assessment — pending/some complete)
+
+Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra and are the **current backlog**.
+
+- [x] **P0 / Card 1** — Restore RBAC invariant: `AuditMixin.restore` now admin-only via `permission_denied` (not `check_permissions`); removed the `action != "restore"` workarounds; `DoctorSchedule` restore gated with `CanViewInactive`. Regression matrix in `backend/tests/test_soft_delete.py`. (backend `9706c34`, merged `7137d84`)
+- [x] **P1 / Card 3** — `RoomType` wired into signal-based cache invalidation (`core/caching.py` `_CACHE_INVALIDATION_MAP`, `core/signals.py`). Regression test `test_room_type_list_cached_and_invalidated`. (same merge)
+- [x] **Card 2** — Masking centralized in `apps/core/masking.py` (`mask`, `is_clinical_role`, `apply_masking`, `mask_doctor_contact`); all serializer `to_representation` blocks route through it; `_mask` copies and cross-app `_mask` imports deleted. (merged `25e5dc1`)
+- [x] **Card 4** — `CoreModelSerializer` (`apps/core/serializers.py`) owns `_request_user()` + the active-readonly rule; 17 duplicate `get_fields` overrides and 5 `_request_user` copies deleted; `patients` keeps its extra requiredness logic via `super()`.
+- [x] **Card 5** — `scope_queryset(qs, user, *, center_field, owner_field)` in `apps/core/services.py` resolves the ambiguous empty `user_accessible_center_ids` set (admins/staff see all; doctors see centers + own rows); used by the three records viewsets.
+- [ ] **Card 6** — Frontend: deepen `useListControls` so all tables share the same search/sort/pagination; backend search via a common filterset base (today patients/records/encounters each re-implement it).
+- [ ] **Card 7** — Frontend RBAC: single `can()` helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks in pages; render page/section/button by capability.
+- [ ] **Card 8** — Monolith page split: extract `Encounters.tsx` (and other giant pages) into composable sub-components (form/list/detail).
+- [ ] **Card 9** — Compose single-source: refactor `docker-compose.prod.yml` to extend/merge the dev compose instead of a near-duplicate (nginx/cert-init/TLS stay prod-only).
+- [ ] **Card 10** — CI: per-repo GitHub Actions (backend pytest+check; frontend vitest + `tsc -b && vite build`; infra compose config validation).
+
 ### Runbook
 - Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
-- Backend tests: `pytest` (from `backend/`; last verified **224 passed**, 2026-08-12).
+- Backend tests: `pytest` (from `backend/`; last verified **355 passed**, 2026-08-15).
 - Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **44 passed**, 2026-08-12).
 - Swagger UI: `http://localhost:8000/api/docs/` · Schema: `http://localhost:8000/api/schema/` · Health: `http://localhost:8000/api/health/`
 - App: `http://localhost:5173` — Vite proxies `/api` and `/media` to the backend.
