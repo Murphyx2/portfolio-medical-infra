@@ -207,6 +207,19 @@ Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Ca
 - [ ] **Card 9** — Compose single-source: refactor `docker-compose.prod.yml` to extend/merge the dev compose instead of a near-duplicate (nginx/cert-init/TLS stay prod-only).
 - [ ] **Card 10** — CI: per-repo GitHub Actions (backend pytest+check; frontend vitest + `tsc -b && vite build`; infra compose config validation).
 
+### Frontend Polish Pass (`$impeccable polish frontend/src/pages`) — todo list (2026-08-15)
+
+Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement only — preserve "The Quiet Clinic" world, no redesign. Backlog input: latest critique snapshot = Doctors page (22/40, slug `frontend-src-pages-doctors-tsx`, 2026-08-13 — P1 user-picker fix already landed; schedule/binding UI intentionally deferred).
+
+- [ ] **Establish the system** — read `DESIGN.md` tokens, shared components (Table, ConfirmDialog, MaskedValue, searchable-select), and neighboring page patterns.
+- [ ] **Load critique backlog** — incorporate latest snapshot (Doctors 22/40) + read `reference/craft-floor.md`.
+- [ ] **Gather evidence** — walk pages at desktop + mobile on live dev server (:5173); note functional completeness and constraints.
+- [ ] **Triage** — separate functional (broken flows, missing loading/empty/error states) from cosmetic; fix in playbook order.
+- [ ] **Polish each page path** — flow/hierarchy, layout/type, color/icons, interaction/state, content/code.
+- [ ] **Verify** — re-walk complete paths (mouse/keyboard/touch), responsive layouts, all states; check console errors, focus, contrast.
+- [ ] **Run detector** — `node <skill>/scripts/detect.mjs --json` over changed targets; fix real defects only.
+- [ ] **Finish** — source diff cleanup (dead code, unused imports, temp artifacts), run frontend build+tests, commit on frontend repo.
+
 ### Runbook
 - Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
 - Backend tests: `pytest` (from `backend/`; last verified **355 passed**, 2026-08-15).
