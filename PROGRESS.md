@@ -178,6 +178,31 @@ Refresh token moved out of `localStorage` into an httpOnly, `SameSite=Strict`, p
 
 ---
 
+## Branching Workflow (adopted 2026-08-18)
+
+All three repos (`backend/`, `frontend/`, `infra/`) now use a two-track branching model:
+
+- **`main` = production.** Only ever updated by merging a tested `dev`. Nothing is committed to `main` directly.
+- **`dev` = integration branch.** All new feature/fix branches are cut from `dev` (`git checkout -b feature/x dev`) and merged back into `dev` when done. Work accumulates on `dev` across a sprint.
+- **Release gate:** once a sprint's worth of work on `dev` passes automated tests (`pytest` in `backend/`, `npm run test` + `npm run build` in `frontend/`) and manual/QA verification (the `qa` sub-agent persona, or a live-stack smoke pass), `dev` is merged into `main` — that merge *is* the production release.
+- Both `main` and `dev` are pushed to `origin` in all three repos; short-lived feature/fix branches are local-only and deleted once merged into `dev` (mirrors the cleanup already done for the pre-2026-08-18 `feature/encounters` / `feature/room-management` / `fix/minor-cedula-and-receptionist-rbac` branches, which were fully merged into `main` and removed).
+- `dev` was cut from `main` on 2026-08-18 at: backend `25e5dc1`, frontend `a3c4362`, infra `2f917bc` — identical to `main` at creation time, so this is a workflow change only, not a code change.
+
+## Sprint 1 (opened 2026-08-18)
+
+**Goal:** close out the deferred frontend/infra Architecture Review backlog (Cards 6-10, see "Architecture Review Cards" under Current State below — this section tracks the same items as a sprint, not a duplicate list).
+
+**Backlog:**
+- Card 6 — shared `useListControls` + common backend filterset base (search/sort/pagination consolidation across patients/records/encounters)
+- Card 7 — single frontend `can()` RBAC helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks
+- Card 8 — split monolithic pages (`Encounters.tsx` etc.) into composable form/list/detail sub-components
+- Card 9 — `docker-compose.prod.yml` extends/merges the dev compose instead of near-duplicating it
+- Card 10 — per-repo CI (backend pytest+check, frontend vitest+`tsc -b && vite build`, infra compose config validation)
+
+**Definition of done (per item):** implemented on a short-lived branch off `dev`, merged into `dev`, tests green, manual QA pass. Items don't need to land all at once — `dev` → `main` can happen once the sprint's items (or a safe subset) are verified together.
+
+---
+
 ## Current State (as of 2026-08-15)
 
 Architecture-review Cards P0+P1 and 2+4+5 are done, merged, deployed (backend `25e5dc1`, tests **355 passed**); Cards 6-10 are the remaining backlog (see "Architecture Review Cards" below). Docs updated (infra `29cb209`). Live-stack masking/scoping smoke-verified 2026-08-15 (admin full PII, IT/CM masked, receptionist M-03 doctor-contact, `active` read-only for non-admins, doctor scoped to own/centers).
