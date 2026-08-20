@@ -1,28 +1,15 @@
-# Production stack: hardened settings, gunicorn, built images (no bind mounts),
-# Redis with password, and no public exposure of DB/Redis.
+# Production overlay — merged over docker-compose.yml.
+# Usage: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+# Hardened settings, gunicorn, built images (no bind mounts), Redis with password,
+# TLS via nginx + cert-init, and no public exposure of DB/Redis.
 name: medicalconsultations-prod
 
 services:
   db:
-    image: postgres:16-alpine
     container_name: mc_prod_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   cache:
-    image: redis:7-alpine
     container_name: mc_prod_cache
-    restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"]
@@ -31,30 +18,18 @@ services:
       retries: 10
 
   backend:
-    build: ../backend
     container_name: mc_prod_backend
-    restart: unless-stopped
-    env_file:
-      - .env
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.prod
       DJANGO_DEBUG: "false"
       DJANGO_SECURE_SSL_REDIRECT: "true"
-      POSTGRES_HOST: db
       REDIS_URL: redis://:${REDIS_PASSWORD}@cache:6379/0
-    volumes:
-      - media_volume:/app/media
     expose:
       - "8000"
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
-    depends_on:
-      db:
-        condition: service_healthy
-      cache:
-        condition: service_healthy
 
   cert-init:
     image: alpine:3.20
@@ -75,7 +50,6 @@ services:
       context: ../frontend
       dockerfile: Dockerfile.prod
     container_name: mc_prod_frontend
-    restart: unless-stopped
     volumes:
       - certs:/etc/nginx/certs:ro
     ports:
@@ -86,6 +60,4 @@ services:
       - cert-init
 
 volumes:
-  pgdata:
-  media_volume:
   certs:

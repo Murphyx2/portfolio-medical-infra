@@ -1,0 +1,33 @@
+# Dev overlay — auto-loaded by `docker compose up` alongside docker-compose.yml.
+# Hot-reload bind mounts, loopback port bindings, runserver, Vite dev server.
+services:
+  db:
+    container_name: mc_db
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  cache:
+    container_name: mc_cache
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  backend:
+    container_name: mc_backend
+    volumes:
+      - ../backend:/app
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  frontend:
+    container_name: mc_frontend
+    environment:
+      PROXY_TARGET: http://backend:8000/api
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host 0.0.0.0
