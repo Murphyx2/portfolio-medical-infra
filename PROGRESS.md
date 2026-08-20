@@ -9,6 +9,27 @@
 > you need the story behind a specific past decision — everything load-bearing for day-to-day work
 > is condensed into this file already.
 
+**Read order for a continuation session:** [Current State](#current-state-as-of-2026-08-15) →
+[Behavioral Invariants](#behavioral-invariants-do-not-regress) → [Data Model](#data-model-entities--design-intent)
+→ everything else as needed. Current State is placed right after the Overview (not at the end) so
+it's the first thing an AI model sees after the one-paragraph project summary.
+
+## Table of Contents
+- [Overview](#overview)
+- [Current State (as of 2026-08-15)](#current-state-as-of-2026-08-15)
+- [Roles](#roles)
+- [Core Modules](#core-modules)
+- [Data Model (entities & design intent)](#data-model-entities--design-intent)
+- [Technology Decisions](#technology-decisions)
+- [Repository Layout (3 repos)](#repository-layout-3-repos)
+- [API Surface](#api-surface)
+- [Behavioral Invariants (do not regress)](#behavioral-invariants-do-not-regress)
+- [Security Findings Ledger](#security-findings-ledger)
+- [Branching Workflow](#branching-workflow-adopted-2026-08-18)
+- [Sprint 1 (opened 2026-08-18)](#sprint-1-opened-2026-08-18)
+- [Suggested Next Steps](#suggested-next-steps-prioritized)
+- [Color Palette](#color-palette-bluepalettepng)
+
 ## Overview
 
 MedicalConsultations is a medical consultations management system for one or multiple
@@ -16,14 +37,99 @@ medical centers. It manages doctors, patients, medical records (including images
 consultation logs), medicines, and appointments. Access is role-based and patient data
 is handled under international security standards.
 
-## Color Palette (BluePalette.png)
+---
 
-| Hex       | Usage                          |
-|-----------|--------------------------------|
-| `#E3F2FD` | Lightest / background tint     |
-| `#90CAF9` | Light accent                    |
-| `#2196F3` | Primary color                   |
-| `#0D47A1` | Dark / text & emphasis          |
+## Current State (as of 2026-08-15)
+
+Architecture-review Cards P0+P1 and 2+4+5 are done, merged, deployed (backend `25e5dc1`, tests **355 passed**); Cards 6-10 are the remaining backlog (see "Architecture Review Cards" below). Docs updated (infra `29cb209`). Live-stack masking/scoping smoke-verified 2026-08-15 (admin full PII, IT/CM masked, receptionist M-03 doctor-contact, `active` read-only for non-admins, doctor scoped to own/centers).
+
+### Repos & latest commits
+| Repo       | Path       | Latest commit |
+|------------|------------|----------------|
+| infra      | `infra/`   | `29cb209` (architecture doc) |
+| backend    | `backend/` | `25e5dc1` (merge of `core-ownership-pass`: cards 2+4+5) |
+| frontend   | `frontend/`| `a3c4362` |
+
+### Design-system artifacts (project root, not in any of the 3 git repos)
+`PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten.
+
+### Architecture Review Cards (2026-08-13 risk assessment — pending/some complete)
+
+Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra and are the **current backlog**.
+
+- [x] **P0 / Card 1** — Restore RBAC invariant: `AuditMixin.restore` now admin-only via `permission_denied` (not `check_permissions`); removed the `action != "restore"` workarounds; `DoctorSchedule` restore gated with `CanViewInactive`. Regression matrix in `backend/tests/test_soft_delete.py`. (backend `9706c34`, merged `7137d84`)
+- [x] **P1 / Card 3** — `RoomType` wired into signal-based cache invalidation (`core/caching.py` `_CACHE_INVALIDATION_MAP`, `core/signals.py`). Regression test `test_room_type_list_cached_and_invalidated`. (same merge)
+- [x] **Card 2** — Masking centralized in `apps/core/masking.py` (`mask`, `is_clinical_role`, `apply_masking`, `mask_doctor_contact`); all serializer `to_representation` blocks route through it; `_mask` copies and cross-app `_mask` imports deleted. (merged `25e5dc1`)
+- [x] **Card 4** — `CoreModelSerializer` (`apps/core/serializers.py`) owns `_request_user()` + the active-readonly rule; 17 duplicate `get_fields` overrides and 5 `_request_user` copies deleted; `patients` keeps its extra requiredness logic via `super()`.
+- [x] **Card 5** — `scope_queryset(qs, user, *, center_field, owner_field)` in `apps/core/services.py` resolves the ambiguous empty `user_accessible_center_ids` set (admins/staff see all; doctors see centers + own rows); used by the three records viewsets.
+- [ ] **Card 6** — Frontend: deepen `useListControls` so all tables share the same search/sort/pagination; backend search via a common filterset base (today patients/records/encounters each re-implement it).
+- [ ] **Card 7** — Frontend RBAC: single `can()` helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks in pages; render page/section/button by capability.
+- [ ] **Card 8** — Monolith page split: extract `Encounters.tsx` (and other giant pages) into composable sub-components (form/list/detail).
+- [ ] **Card 9** — Compose single-source: refactor `docker-compose.prod.yml` to extend/merge the dev compose instead of a near-duplicate (nginx/cert-init/TLS stay prod-only).
+- [ ] **Card 10** — CI: per-repo GitHub Actions (backend pytest+check; frontend vitest + `tsc -b && vite build`; infra compose config validation).
+
+### Frontend Polish Pass (`$impeccable polish frontend/src/pages`) — todo list (2026-08-15)
+
+Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement only — preserve "The Quiet Clinic" world, no redesign. Backlog input: latest critique snapshot = Doctors page (22/40, slug `frontend-src-pages-doctors-tsx`, 2026-08-13 — P1 user-picker fix already landed; schedule/binding UI intentionally deferred).
+
+- [ ] **Establish the system** — read `DESIGN.md` tokens, shared components (Table, ConfirmDialog, MaskedValue, searchable-select), and neighboring page patterns.
+- [ ] **Load critique backlog** — incorporate latest snapshot (Doctors 22/40) + read `reference/craft-floor.md`.
+- [ ] **Gather evidence** — walk pages at desktop + mobile on live dev server (:5173); note functional completeness and constraints.
+- [ ] **Triage** — separate functional (broken flows, missing loading/empty/error states) from cosmetic; fix in playbook order.
+- [ ] **Polish each page path** — flow/hierarchy, layout/type, color/icons, interaction/state, content/code.
+- [ ] **Verify** — re-walk complete paths (mouse/keyboard/touch), responsive layouts, all states; check console errors, focus, contrast.
+- [ ] **Run detector** — `node <skill>/scripts/detect.mjs --json` over changed targets; fix real defects only.
+- [ ] **Finish** — source diff cleanup (dead code, unused imports, temp artifacts), run frontend build+tests, commit on frontend repo.
+
+### Runbook
+- Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
+- Backend tests: `pytest` (from `backend/`; last verified **355 passed**, 2026-08-15).
+- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **44 passed**, 2026-08-12).
+- Swagger UI: `http://localhost:8000/api/docs/` · Schema: `http://localhost:8000/api/schema/` · Health: `http://localhost:8000/api/health/`
+- App: `http://localhost:5173` — Vite proxies `/api` and `/media` to the backend.
+- Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by `cert-init`; browser warns until real certs are mounted).
+- Live QA smoke scripts (from host): `qa_full_verification.ps1`, `qa_integration_smoke.ps1`, `infra\scripts\qa_e2e_verification.py` — all green as of 2026-08-10. **Wait ~70s between runs** (login-throttle, see pitfalls below).
+
+### Known pitfalls (read before touching related code)
+- **Vite stale-cache on Docker bind-mount:** the frontend container can keep serving old transformed modules after code/env changes (root cause of 2+ past incidents, most recently 2026-08-10 where it silently served pre-session code through ~10 commits). Fix: `docker compose up -d --force-recreate frontend`, not plain `restart`. **Never trust an HTTP 200 as proof of freshness** — diff the actual served content (or grep for a source-only identifier) against current source. See [[feedback_verify_dont_assume_fixed]].
+- **Proxy config:** browser must use the *relative* `/api` path. Server-side proxy target is `PROXY_TARGET=http://backend:8000/api`. Do **not** set `VITE_API_BASE_URL` for dev — it bakes the Docker hostname into the client bundle.
+- **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it directly** — existing encrypted rows become unreadable. To rotate: `python manage.py reencrypt_pii --old-key <OLD_KEY>` then recreate the backend.
+- **Login throttle race between smoke scripts:** 10/min/IP, and one script deliberately fires ~11 rapid logins. Wait ~70s between smoke-script runs or the next script's logins 429.
+- **Postgres index vs. data migration:** encrypting existing rows and adding an index on the same table must be separate migrations (see Data Model note below) — Postgres rejects `CREATE INDEX` on a table with pending trigger events.
+- **PowerShell 5.1 (Windows host):** no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe`/`Invoke-RestMethod`. Multipart uploads: `curl.exe -F` (no `Invoke-RestMethod -Form` in 5.1).
+- **Server-side caching + tests:** `CachedListViewMixin` (medicines/ARS/centers) and `CachedSpectacularAPIView` (schema) use the real Django cache, which pytest-django's per-test rollback does **not** reset. `tests/conftest.py`'s autouse `clear_cache` fixture handles this — if a new cached endpoint shows flaky counts in unrelated tests, check this fixture first.
+- **Postgres-only migrations:** trigram GIN indexes (`patients/migrations/0008`, `records/migrations/0003`) are `RunPython` ops gated on `schema_editor.connection.vendor` — do **not** add a `GinIndex` directly to `Meta.indexes`, it breaks `migrate` on the SQLite test backend.
+- **Cache invalidation is signal-based, not `AuditMixin`-based:** several admins (`MedicalCenterAdmin`, `MedicineAdmin`, `ARSAdmin`, etc.) write through a separate `AuditModelAdmin` base, not the DRF `AuditMixin`. An `AuditMixin`-only invalidation hook would miss every Django-admin edit. Use `post_save`/`post_delete` signals (`apps/core/signals.py`).
+- **Encrypted-column sort is a paired backend/frontend change (2026-08-10 perf pass):** `cedula`/`nss`/`phone`/`email`/`age` were removed from backend `ordering_fields` (can't sort encrypted columns in SQL); the frontend compensates with a client-side, current-page-only sort for exactly those 5 columns (`Patients.tsx`). Don't revert one side without the other.
+- **Custom sub-agent personas don't register natively** in this harness — see "Sub-agent personas" below.
+- **`SoftDeleteManager` makes `objects` the filtered default manager** on the 12 soft-deletable models (`apps/core/models.py`) — any ViewSet's class-level `queryset` must use `Model.all_objects`, not `Model.objects`, or admin's `include_inactive=true` has nothing to widen (`MedicalCenterViewSet`'s `doctor_count` `Count()` annotation must survive this swap too — don't drop the `.annotate()`/`.select_related()` chain when editing). Forward FK access (`appointment.doctor`) stays unfiltered via `_base_manager` — don't set `Meta.base_manager_name` on these models, that's what keeps it that way. Django admin needed its own fix too (`AuditModelAdmin.get_queryset`/`delete_model`/`get_actions` in `apps/core/admin.py`) — it isn't covered by the DRF-side changes.
+- **Nested prefetches don't honor `include_inactive`:** `MedicalRecordViewSet`'s `prefetch_related("images")` and `ARSViewSet`'s `prefetch_related("programs")` resolve through the *child* model's own filtered manager regardless of the parent's `include_inactive` param — an admin viewing a record with `?include_inactive=true` still won't see a deactivated `RecordImage` nested inside it. Query `RecordImageViewSet`/programs directly instead. Known limitation, not a bug.
+
+### Sub-agent personas
+- Persona briefs (mission, checklist, report format) live in `infra/AGENTS.md`: **security** (severity-categorized audit findings, requires approval before fixing) and **qa** (pytest/vitest, RBAC matrix, PII masking, JWT rotation, throttling, E2E — may add tests, must not touch app code).
+- This harness does **not** register custom `.claude/agents/*.md` files as callable `subagent_type`s (confirmed even for official plugin agents). Dispatch instead via `subagent_type: "general-purpose"` with the persona brief from `infra/AGENTS.md` pasted into the prompt. See [[harness_custom_agents_unsupported]].
+
+### Environment
+- Windows host · Python 3.13.3 · Node 22.14.0 · Docker 29.6.1 + Compose v5.3.0 · git 2.45.1.
+- Backend venv at `backend\.venv`; deps in `backend/requirements/{base,dev,prod}.txt`.
+- Dev data: seed admin `admin` / `AdminPass123!`. Per-role test credentials: `infra/TEST_USERS.md` (all six roles verified).
+
+### Accepted risks (current)
+- Non-doctor staff roles (receptionist/nurse/IT/CM) still see all centers (no user↔center visibility model for those roles).
+- Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
+- Prod TLS uses a self-signed cert (real certs must be mounted before public exposure).
+- Patient edit form shows raw stored digits for cédula when reopening an existing patient (cosmetic).
+- `react-router` stays on v7 (needs React ≥ 19.2.7 first; app is on React 18).
+- Records detail shows raw SOAP section initials (cosmetic).
+- `db_reviewer` read-only Postgres credential lives in `TEST_USERS.md` — low urgency (repos private, port loopback-bound) but flagged for rotation.
+
+### Information-handling summary
+- **Not in the repos:** the real `.env` (secrets, `PII_FIELD_KEY`, DB/Redis passwords) is gitignored everywhere and absent from git history. Without `PII_FIELD_KEY`, encrypted rows are unreadable even with full DB access.
+- **Public by design:** the three repos contain all source, migrations, tests, CI, compose — anyone with them can rebuild the app from `.env.example` + a fresh key. Unavoidable; the code is the product.
+- **Dev credentials are exposed** in `TEST_USERS.md`/QA scripts — local-dev only, stack binds to loopback so they grant nothing unless a dev stack is exposed on a real IP.
+- **Operational rule:** `.env` is the only secret store. If these repos ever go to a public remote, treat all documented dev credentials as compromised and never commit `.env`.
+
+---
 
 ## Roles
 
@@ -190,7 +296,7 @@ All three repos (`backend/`, `frontend/`, `infra/`) now use a two-track branchin
 
 ## Sprint 1 (opened 2026-08-18)
 
-**Goal:** close out the deferred frontend/infra Architecture Review backlog (Cards 6-10, see "Architecture Review Cards" under Current State below — this section tracks the same items as a sprint, not a duplicate list).
+**Goal:** close out the deferred frontend/infra Architecture Review backlog (Cards 6-10, see "Architecture Review Cards" under Current State above — this section tracks the same items as a sprint, not a duplicate list).
 
 **Backlog:**
 - Card 6 — shared `useListControls` + common backend filterset base (search/sort/pagination consolidation across patients/records/encounters)
@@ -203,96 +309,6 @@ All three repos (`backend/`, `frontend/`, `infra/`) now use a two-track branchin
 
 ---
 
-## Current State (as of 2026-08-15)
-
-Architecture-review Cards P0+P1 and 2+4+5 are done, merged, deployed (backend `25e5dc1`, tests **355 passed**); Cards 6-10 are the remaining backlog (see "Architecture Review Cards" below). Docs updated (infra `29cb209`). Live-stack masking/scoping smoke-verified 2026-08-15 (admin full PII, IT/CM masked, receptionist M-03 doctor-contact, `active` read-only for non-admins, doctor scoped to own/centers).
-
-### Repos & latest commits
-| Repo       | Path       | Latest commit |
-|------------|------------|----------------|
-| infra      | `infra/`   | `29cb209` (architecture doc) |
-| backend    | `backend/` | `25e5dc1` (merge of `core-ownership-pass`: cards 2+4+5) |
-| frontend   | `frontend/`| `a3c4362` |
-
-### Design-system artifacts (project root, not in any of the 3 git repos)
-`PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten.
-
-### Architecture Review Cards (2026-08-13 risk assessment — pending/some complete)
-
-Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra and are the **current backlog**.
-
-- [x] **P0 / Card 1** — Restore RBAC invariant: `AuditMixin.restore` now admin-only via `permission_denied` (not `check_permissions`); removed the `action != "restore"` workarounds; `DoctorSchedule` restore gated with `CanViewInactive`. Regression matrix in `backend/tests/test_soft_delete.py`. (backend `9706c34`, merged `7137d84`)
-- [x] **P1 / Card 3** — `RoomType` wired into signal-based cache invalidation (`core/caching.py` `_CACHE_INVALIDATION_MAP`, `core/signals.py`). Regression test `test_room_type_list_cached_and_invalidated`. (same merge)
-- [x] **Card 2** — Masking centralized in `apps/core/masking.py` (`mask`, `is_clinical_role`, `apply_masking`, `mask_doctor_contact`); all serializer `to_representation` blocks route through it; `_mask` copies and cross-app `_mask` imports deleted. (merged `25e5dc1`)
-- [x] **Card 4** — `CoreModelSerializer` (`apps/core/serializers.py`) owns `_request_user()` + the active-readonly rule; 17 duplicate `get_fields` overrides and 5 `_request_user` copies deleted; `patients` keeps its extra requiredness logic via `super()`.
-- [x] **Card 5** — `scope_queryset(qs, user, *, center_field, owner_field)` in `apps/core/services.py` resolves the ambiguous empty `user_accessible_center_ids` set (admins/staff see all; doctors see centers + own rows); used by the three records viewsets.
-- [ ] **Card 6** — Frontend: deepen `useListControls` so all tables share the same search/sort/pagination; backend search via a common filterset base (today patients/records/encounters each re-implement it).
-- [ ] **Card 7** — Frontend RBAC: single `can()` helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks in pages; render page/section/button by capability.
-- [ ] **Card 8** — Monolith page split: extract `Encounters.tsx` (and other giant pages) into composable sub-components (form/list/detail).
-- [ ] **Card 9** — Compose single-source: refactor `docker-compose.prod.yml` to extend/merge the dev compose instead of a near-duplicate (nginx/cert-init/TLS stay prod-only).
-- [ ] **Card 10** — CI: per-repo GitHub Actions (backend pytest+check; frontend vitest + `tsc -b && vite build`; infra compose config validation).
-
-### Frontend Polish Pass (`$impeccable polish frontend/src/pages`) — todo list (2026-08-15)
-
-Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement only — preserve "The Quiet Clinic" world, no redesign. Backlog input: latest critique snapshot = Doctors page (22/40, slug `frontend-src-pages-doctors-tsx`, 2026-08-13 — P1 user-picker fix already landed; schedule/binding UI intentionally deferred).
-
-- [ ] **Establish the system** — read `DESIGN.md` tokens, shared components (Table, ConfirmDialog, MaskedValue, searchable-select), and neighboring page patterns.
-- [ ] **Load critique backlog** — incorporate latest snapshot (Doctors 22/40) + read `reference/craft-floor.md`.
-- [ ] **Gather evidence** — walk pages at desktop + mobile on live dev server (:5173); note functional completeness and constraints.
-- [ ] **Triage** — separate functional (broken flows, missing loading/empty/error states) from cosmetic; fix in playbook order.
-- [ ] **Polish each page path** — flow/hierarchy, layout/type, color/icons, interaction/state, content/code.
-- [ ] **Verify** — re-walk complete paths (mouse/keyboard/touch), responsive layouts, all states; check console errors, focus, contrast.
-- [ ] **Run detector** — `node <skill>/scripts/detect.mjs --json` over changed targets; fix real defects only.
-- [ ] **Finish** — source diff cleanup (dead code, unused imports, temp artifacts), run frontend build+tests, commit on frontend repo.
-
-### Runbook
-- Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
-- Backend tests: `pytest` (from `backend/`; last verified **355 passed**, 2026-08-15).
-- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **44 passed**, 2026-08-12).
-- Swagger UI: `http://localhost:8000/api/docs/` · Schema: `http://localhost:8000/api/schema/` · Health: `http://localhost:8000/api/health/`
-- App: `http://localhost:5173` — Vite proxies `/api` and `/media` to the backend.
-- Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by `cert-init`; browser warns until real certs are mounted).
-- Live QA smoke scripts (from host): `qa_full_verification.ps1`, `qa_integration_smoke.ps1`, `infra\scripts\qa_e2e_verification.py` — all green as of 2026-08-10. **Wait ~70s between runs** (login-throttle, see pitfalls below).
-
-### Known pitfalls (read before touching related code)
-- **Vite stale-cache on Docker bind-mount:** the frontend container can keep serving old transformed modules after code/env changes (root cause of 2+ past incidents, most recently 2026-08-10 where it silently served pre-session code through ~10 commits). Fix: `docker compose up -d --force-recreate frontend`, not plain `restart`. **Never trust an HTTP 200 as proof of freshness** — diff the actual served content (or grep for a source-only identifier) against current source. See [[feedback_verify_dont_assume_fixed]].
-- **Proxy config:** browser must use the *relative* `/api` path. Server-side proxy target is `PROXY_TARGET=http://backend:8000/api`. Do **not** set `VITE_API_BASE_URL` for dev — it bakes the Docker hostname into the client bundle.
-- **PII encryption key:** `infra/.env` (gitignored) holds `PII_FIELD_KEY`. **Never change it directly** — existing encrypted rows become unreadable. To rotate: `python manage.py reencrypt_pii --old-key <OLD_KEY>` then recreate the backend.
-- **Login throttle race between smoke scripts:** 10/min/IP, and one script deliberately fires ~11 rapid logins. Wait ~70s between smoke-script runs or the next script's logins 429.
-- **Postgres index vs. data migration:** encrypting existing rows and adding an index on the same table must be separate migrations (see Data Model note above) — Postgres rejects `CREATE INDEX` on a table with pending trigger events.
-- **PowerShell 5.1 (Windows host):** no `Invoke-WebRequest -SkipHttpErrorCheck`; use `curl.exe`/`Invoke-RestMethod`. Multipart uploads: `curl.exe -F` (no `Invoke-RestMethod -Form` in 5.1).
-- **Server-side caching + tests:** `CachedListViewMixin` (medicines/ARS/centers) and `CachedSpectacularAPIView` (schema) use the real Django cache, which pytest-django's per-test rollback does **not** reset. `tests/conftest.py`'s autouse `clear_cache` fixture handles this — if a new cached endpoint shows flaky counts in unrelated tests, check this fixture first.
-- **Postgres-only migrations:** trigram GIN indexes (`patients/migrations/0008`, `records/migrations/0003`) are `RunPython` ops gated on `schema_editor.connection.vendor` — do **not** add a `GinIndex` directly to `Meta.indexes`, it breaks `migrate` on the SQLite test backend.
-- **Cache invalidation is signal-based, not `AuditMixin`-based:** several admins (`MedicalCenterAdmin`, `MedicineAdmin`, `ARSAdmin`, etc.) write through a separate `AuditModelAdmin` base, not the DRF `AuditMixin`. An `AuditMixin`-only invalidation hook would miss every Django-admin edit. Use `post_save`/`post_delete` signals (`apps/core/signals.py`).
-- **Encrypted-column sort is a paired backend/frontend change (2026-08-10 perf pass):** `cedula`/`nss`/`phone`/`email`/`age` were removed from backend `ordering_fields` (can't sort encrypted columns in SQL); the frontend compensates with a client-side, current-page-only sort for exactly those 5 columns (`Patients.tsx`). Don't revert one side without the other.
-- **Custom sub-agent personas don't register natively** in this harness — see "Sub-agent personas" below.
-- **`SoftDeleteManager` makes `objects` the filtered default manager** on the 12 soft-deletable models (`apps/core/models.py`) — any ViewSet's class-level `queryset` must use `Model.all_objects`, not `Model.objects`, or admin's `include_inactive=true` has nothing to widen (`MedicalCenterViewSet`'s `doctor_count` `Count()` annotation must survive this swap too — don't drop the `.annotate()`/`.select_related()` chain when editing). Forward FK access (`appointment.doctor`) stays unfiltered via `_base_manager` — don't set `Meta.base_manager_name` on these models, that's what keeps it that way. Django admin needed its own fix too (`AuditModelAdmin.get_queryset`/`delete_model`/`get_actions` in `apps/core/admin.py`) — it isn't covered by the DRF-side changes.
-- **Nested prefetches don't honor `include_inactive`:** `MedicalRecordViewSet`'s `prefetch_related("images")` and `ARSViewSet`'s `prefetch_related("programs")` resolve through the *child* model's own filtered manager regardless of the parent's `include_inactive` param — an admin viewing a record with `?include_inactive=true` still won't see a deactivated `RecordImage` nested inside it. Query `RecordImageViewSet`/programs directly instead. Known limitation, not a bug.
-
-### Sub-agent personas
-- Persona briefs (mission, checklist, report format) live in `infra/AGENTS.md`: **security** (severity-categorized audit findings, requires approval before fixing) and **qa** (pytest/vitest, RBAC matrix, PII masking, JWT rotation, throttling, E2E — may add tests, must not touch app code).
-- This harness does **not** register custom `.claude/agents/*.md` files as callable `subagent_type`s (confirmed even for official plugin agents). Dispatch instead via `subagent_type: "general-purpose"` with the persona brief from `infra/AGENTS.md` pasted into the prompt. See [[harness_custom_agents_unsupported]].
-
-### Environment
-- Windows host · Python 3.13.3 · Node 22.14.0 · Docker 29.6.1 + Compose v5.3.0 · git 2.45.1.
-- Backend venv at `backend\.venv`; deps in `backend/requirements/{base,dev,prod}.txt`.
-- Dev data: seed admin `admin` / `AdminPass123!`. Per-role test credentials: `infra/TEST_USERS.md` (all six roles verified).
-
-### Accepted risks (current)
-- Non-doctor staff roles (receptionist/nurse/IT/CM) still see all centers (no user↔center visibility model for those roles).
-- Django admin still exposes decrypted PII to the single `is_staff` admin account (IT revoked; only ADMIN has it).
-- Prod TLS uses a self-signed cert (real certs must be mounted before public exposure).
-- Patient edit form shows raw stored digits for cédula when reopening an existing patient (cosmetic).
-- `react-router` stays on v7 (needs React ≥ 19.2.7 first; app is on React 18).
-- Records detail shows raw SOAP section initials (cosmetic).
-- `db_reviewer` read-only Postgres credential lives in `TEST_USERS.md` — low urgency (repos private, port loopback-bound) but flagged for rotation.
-
-### Information-handling summary
-- **Not in the repos:** the real `.env` (secrets, `PII_FIELD_KEY`, DB/Redis passwords) is gitignored everywhere and absent from git history. Without `PII_FIELD_KEY`, encrypted rows are unreadable even with full DB access.
-- **Public by design:** the three repos contain all source, migrations, tests, CI, compose — anyone with them can rebuild the app from `.env.example` + a fresh key. Unavoidable; the code is the product.
-- **Dev credentials are exposed** in `TEST_USERS.md`/QA scripts — local-dev only, stack binds to loopback so they grant nothing unless a dev stack is exposed on a real IP.
-- **Operational rule:** `.env` is the only secret store. If these repos ever go to a public remote, treat all documented dev credentials as compromised and never commit `.env`.
-
 ## Suggested Next Steps (prioritized)
 1. **Non-doctor center scoping:** extend the patient `center` model decision to receptionists/nurses/center-managers.
 2. **Async layer:** add Celery on the existing Redis (appointment reminders, image processing) — give it its own DB index, since DB 0 already does throttling + reference-list/schema caching.
@@ -304,3 +320,12 @@ Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement
 8. **`theme/palette.ts` is dead code** with stale colors (pre-contrast-fix `#66BB6A`) — delete, or sync to `index.css`'s current tokens if a JS-side color source is ever needed.
 9. CI workflows in `infra/.github/workflows/` may reference stale repo names — verify against `Murphyx2/MedicalConsultation-{backend,frontend,infra}`.
 10. **Soft-delete follow-ups (deferred, 2026-08-11 pass):** no restore UI yet for `ConsultationLog`/`RecordImage` (no dedicated list view exists) or `DoctorSchedule`/`DoctorCenterBinding` (API supports restore, frontend doesn't surface it) — low priority since the nested-prefetch limitation (Known Pitfalls) already blocks seeing inactive children of a record/ARS from the parent view anyway.
+
+## Color Palette (BluePalette.png)
+
+| Hex       | Usage                          |
+|-----------|--------------------------------|
+| `#E3F2FD` | Lightest / background tint     |
+| `#90CAF9` | Light accent                    |
+| `#2196F3` | Primary color                   |
+| `#0D47A1` | Dark / text & emphasis          |
