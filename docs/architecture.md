@@ -137,6 +137,8 @@ in the base unless it is dev-only or prod-only.
 
 ### 5.1 Backup & Restore
 
+Full usage guide: [`infra/docs/backups.md`](./backups.md). Summary:
+
 All PHI (patient rows, consultation logs, audit entries, clinical images) lives in two
 named Docker volumes — `medicalconsultations_pgdata` (Postgres) and
 `medicalconsultations_media_volume` (uploaded images) — on a single laptop-class host with
