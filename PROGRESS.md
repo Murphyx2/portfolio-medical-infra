@@ -14,6 +14,16 @@
 → everything else as needed. Current State is placed right after the Overview (not at the end) so
 it's the first thing an AI model sees after the one-paragraph project summary.
 
+> **`../ARCHITECTURE_REFACTOR_PLAN.md`** (project root, outside all 3 repos) is a separate,
+> machine-readable task list from two architecture-audit passes on 2026-08-20 — 38 numbered items
+> total (pass 1: B1-B9 backend, F1-F5 frontend, I1 infra; pass 2 evening, post-B-series:
+> B10-B17 backend, F6-F15 frontend, I2-I7 infra), each with its own branch/verify/status/priority
+> checkboxes, meant to be picked up incrementally across sessions. Read it before touching backend
+> `apps/core/services*`/`apps/*/filters.py`/serializers or the frontend `useListControls`/RBAC/
+> page-monolith areas — it may already have a checked-off item covering the change you're about
+> to make, or a plan file for one already approved but not yet started (F1/F2/F3 as of this
+> writing — see below).
+
 ## Table of Contents
 - [Overview](#overview)
 - [Current State (as of 2026-08-20)](#current-state-as-of-2026-08-20)
@@ -41,34 +51,34 @@ is handled under international security standards.
 
 ## Current State (as of 2026-08-20)
 
-Backend and frontend `dev` branches carry work **beyond** what `main` (production) has — `main` is the last released snapshot; `dev` accumulates sprint work. Cards 9+10 are implemented on **unmerged feature branches** (see "In-flight branches" below). Test counts verified 2026-08-20: backend **368 passed**, frontend **48 passed** + clean build.
+Backend and frontend `dev` branches carry work **beyond** what `main` (production) has — `main` is the last released snapshot; `dev` accumulates sprint work. Cards 9+10 (infra compose + per-repo CI) are now merged into all three `dev` branches. Test counts verified 2026-08-20 (evening, after `ARCHITECTURE_REFACTOR_PLAN.md` items B1/B2/B3/B4/B5/B6/B7/B8/B9 + Cards 9/10 merges): backend **456 passed**, frontend **48 passed** + clean build. No in-flight feature branches remain unmerged in any repo as of this update.
 
 ### What's on which branch (all three repos)
-| Repo | `main` (prod, released) | `dev` (integration, ahead of main) | In-flight feature branches (NOT merged) |
+| Repo | `main` (prod, released) | `dev` (integration, ahead of main) | In-flight feature branches |
 |------|--------------------------|-------------------------------------|------------------------------------------|
-| infra | `c806327` (branching workflow + Sprint 1 opened) | `d1b5469` (PROGRESS.md AI-readable reformat) | `feature/card9-10-compose-ci` → `2f20c2d` (Card 9 compose + Card 10 CI) |
-| backend | `25e5dc1` (cards 2+4+5 merge) | `a91e88e` (doctor-services M2M, architecture-cleanup, Postgres audit fixes) | `feature/card10-ci` → `b0c3b12` |
-| frontend | `a3c4362` (encounters merge) | `9e110a7` (1 commit ahead of `origin/dev`: button/typography polish) | `feature/card10-ci` → `1cac207` |
+| infra | `c806327` (branching workflow + Sprint 1 opened) | `c08b522` (Cards 9+10 merged — compose single-source + per-repo CI) | none |
+| backend | `25e5dc1` (cards 2+4+5 merge) | `cecaa29` (doctor-services M2M, Postgres audit fixes, `ARCHITECTURE_REFACTOR_PLAN.md` items B1/B9 (Card 6 backend half + invariant tests), B2/B3/B4 (write-scoping/helper-columns/permissions), B5 (reference-data viewset base), B6/B7/B8 (summary+masking, lifecycle services, core/services split), Card 10 CI) | none |
+| frontend | `a3c4362` (encounters merge) | `0bdfe36` (doctor-services picker, button/typography polish, save-toast + Encounters filter fix, Card 10 CI) | none |
 
-**Next step for a continuation session:** merge the three in-flight branches into their repos' `dev` (infra `feature/card9-10-compose-ci`, backend+frontend `feature/card10-ci`), re-run the tests, then `dev` → `main`. Do NOT touch `main` directly.
+**Next step for a continuation session:** `dev` → `main` promotion is now unblocked in all three repos (no unmerged in-flight work), pending a full QA pass — see Sprint 1 below. Separately, **F1/F2/F3** (frontend: `useListControls` → `ListPage` layout, single `can()` RBAC helper + route gating, Encounters/Records page splits) have an **approved implementation plan** written but not yet started — see `ARCHITECTURE_REFACTOR_PLAN.md`'s F1/F2/F3 entries and the plan file referenced there for the exact RBAC policy-table decisions already made (several intentional behavior changes were approved: Patients create/edit narrowed off IT/CENTER_MANAGER, Encounters delete narrowed off IT, Rooms/RoomTypes/Medicines/Appointments-delete widened to RECEPTIONIST, Records widened to RECEPTIONIST except delete, ARS view opened to all roles, and a new Appointments "edit" feature added — none of this is implemented yet, it's approved-but-pending). Do NOT touch `main` directly.
 
 ### Design-system artifacts (project root, not in any of the 3 git repos)
 `PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten. A consolidated app-wide critique ran 2026-08-20 (score 24/40, slug `frontend-all-pages-consolidated`) — its P1s (Encounters date-filter hides data, no save-success feedback, ungrouped sidebar) are a candidate next polish target.
 
 ### Architecture Review Cards (2026-08-13 risk assessment — pending/some complete)
 
-Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra. **Status 2026-08-20: Cards 1-5 done & merged; Cards 9+10 done on unmerged feature branches; Cards 6-8 remain open.**
+Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra. **Status 2026-08-20 (evening): Cards 1-5 done & merged; Cards 9+10 done and merged to `dev` in all three repos; Card 6's backend half done & merged (`ARCHITECTURE_REFACTOR_PLAN.md` item B1); Card 6 (frontend half)/7/8 have an approved plan (items F1/F2/F3) but are not yet implemented.**
 
 - [x] **P0 / Card 1** — Restore RBAC invariant: `AuditMixin.restore` now admin-only via `permission_denied` (not `check_permissions`); removed the `action != "restore"` workarounds; `DoctorSchedule` restore gated with `CanViewInactive`. Regression matrix in `backend/tests/test_soft_delete.py`. (backend `9706c34`, merged `7137d84`)
 - [x] **P1 / Card 3** — `RoomType` wired into signal-based cache invalidation (`core/caching.py` `_CACHE_INVALIDATION_MAP`, `core/signals.py`). Regression test `test_room_type_list_cached_and_invalidated`. (same merge)
 - [x] **Card 2** — Masking centralized in `apps/core/masking.py` (`mask`, `is_clinical_role`, `apply_masking`, `mask_doctor_contact`); all serializer `to_representation` blocks route through it; `_mask` copies and cross-app `_mask` imports deleted. (merged `25e5dc1`)
 - [x] **Card 4** — `CoreModelSerializer` (`apps/core/serializers.py`) owns `_request_user()` + the active-readonly rule; 17 duplicate `get_fields` overrides and 5 `_request_user` copies deleted; `patients` keeps its extra requiredness logic via `super()`.
 - [x] **Card 5** — `scope_queryset(qs, user, *, center_field, owner_field)` in `apps/core/services.py` resolves the ambiguous empty `user_accessible_center_ids` set (admins/staff see all; doctors see centers + own rows); used by the three records viewsets.
-- [ ] **Card 6** — Frontend: deepen `useListControls` so all tables share the same search/sort/pagination; backend search via a common filterset base (today patients/records/encounters each re-implement it).
-- [ ] **Card 7** — Frontend RBAC: single `can()` helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks in pages; render page/section/button by capability.
-- [ ] **Card 8** — Monolith page split: extract `Encounters.tsx` (and other giant pages) into composable sub-components (form/list/detail).
-- [x] **Card 9** — Compose single-source: `docker-compose.yml` is now the shared base (image/env/healthchecks/volumes); `docker-compose.override.yml` carries dev-only bind mounts/ports/runserver; `docker-compose.prod.yml` merges prod-only gunicorn/TLS/cert-init. Commands: dev `docker compose up -d`, prod `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`. `.env.example` reconciled (JWT_REFRESH 7→3, PROXY_TARGET note). **On infra `feature/card9-10-compose-ci` (`2f20c2d`) — NOT yet merged to `dev`.**
-- [x] **Card 10** — Per-repo CI: `backend/.github/workflows/ci.yml` (check+pytest), `frontend/.github/workflows/ci.yml` (ci+build+vitest), `infra/.github/workflows/ci.yml` (compose config validation). All trigger on `dev`/`main` push + PR + `workflow_dispatch`. Old cross-repo workflows in `infra/.github/workflows/` deleted. **On backend+frontend `feature/card10-ci` (`b0c3b12`/`1cac207`) and infra `feature/card9-10-compose-ci` — NOT yet merged to `dev`.**
+- [~] **Card 6** — backend half **done & merged** (`apps/core/filters.py::SearchFilterBase`, `ARCHITECTURE_REFACTOR_PLAN.md` item B1, backend `23683e3`). Frontend half **planned, not started** — `ARCHITECTURE_REFACTOR_PLAN.md` item F1 (deepen `useListControls` into a `ListPage` layout across all 13 list pages); a detailed implementation plan (exact line ranges per page, extension-point design) has been approved and is ready to execute.
+- [ ] **Card 7** — Frontend RBAC: single `can()` helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks in pages; render page/section/button by capability. **Planned, not started** — `ARCHITECTURE_REFACTOR_PLAN.md` item F2. An Explore pass found 9 real RBAC inconsistencies (vs. 3 originally documented) and the user has approved a full resolution for all of them, including some intentional widenings/narrowings — see item F2's table for the exact per-resource role sets to implement. Also adds a genuinely new feature (Appointments currently has no edit action/UI at all) as part of this card.
+- [ ] **Card 8** — Monolith page split: extract `Encounters.tsx` (844 lines) and `Records.tsx` (470 lines) into composable form/list/detail sub-components; also folds in Card 6's `ui.tsx` domain-tail cleanup (`ServiceChipList`/`ServiceCheckboxList` → Doctors feature module). **Planned, not started** — `ARCHITECTURE_REFACTOR_PLAN.md` item F3 (F5 folded in). Depends on F1 (list shell) and F2 (`can()`/route gating) landing first.
+- [x] **Card 9** — Compose single-source: `docker-compose.yml` is now the shared base (image/env/healthchecks/volumes); `docker-compose.override.yml` carries dev-only bind mounts/ports/runserver; `docker-compose.prod.yml` merges prod-only gunicorn/TLS/cert-init. Commands: dev `docker compose up -d`, prod `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`. `.env.example` reconciled (JWT_REFRESH 7→3, PROXY_TARGET note). **Merged to infra `dev` at `c08b522`.**
+- [x] **Card 10** — Per-repo CI: `backend/.github/workflows/ci.yml` (check+pytest), `frontend/.github/workflows/ci.yml` (ci+build+vitest), `infra/.github/workflows/ci.yml` (compose config validation). All trigger on `dev`/`main` push + PR + `workflow_dispatch`. Old cross-repo workflows in `infra/.github/workflows/` deleted. **Merged: backend `dev` at `cecaa29`, frontend `dev` at `0bdfe36` (already merged prior to this update), infra `dev` at `c08b522`.**
 
 ### Frontend Polish Pass (`$impeccable polish frontend/src/pages`) — todo list (2026-08-15)
 
@@ -85,8 +95,8 @@ Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement
 
 ### Runbook
 - Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
-- Backend tests: `pytest` (from `backend/`; last verified **368 passed**, 2026-08-20).
-- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **48 passed**, 2026-08-20).
+- Backend tests: `pytest` (from `backend/`; last verified **456 passed**, 2026-08-20 evening).
+- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **48 passed**, 2026-08-20 evening).
 - Swagger UI: `http://localhost:8000/api/docs/` · Schema: `http://localhost:8000/api/schema/` · Health: `http://localhost:8000/api/health/`
 - App: `http://localhost:5173` — Vite proxies `/api` and `/media` to the backend.
 - Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by `cert-init`; browser warns until real certs are mounted).
@@ -300,16 +310,16 @@ All three repos (`backend/`, `frontend/`, `infra/`) now use a two-track branchin
 
 **Goal:** close out the deferred frontend/infra Architecture Review backlog (Cards 6-10, see "Architecture Review Cards" under Current State above — this section tracks the same items as a sprint, not a duplicate list).
 
-**Backlog status (2026-08-20):**
-- [ ] Card 6 — shared `useListControls` + common backend filterset base (search/sort/pagination consolidation across patients/records/encounters)
-- [ ] Card 7 — single frontend `can()` RBAC helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks
-- [ ] Card 8 — split monolithic pages (`Encounters.tsx` etc.) into composable form/list/detail sub-components
-- [x] Card 9 — `docker-compose.prod.yml` extends/merges the dev compose instead of near-duplicating it — **implemented on infra `feature/card9-10-compose-ci`, awaiting merge to `dev`**
-- [x] Card 10 — per-repo CI (backend pytest+check, frontend vitest+`tsc -b && vite build`, infra compose config validation) — **implemented on backend+frontend `feature/card10-ci` + infra `feature/card9-10-compose-ci`, awaiting merge to `dev`**
+**Backlog status (2026-08-20, evening update):**
+- [~] Card 6 — backend half (`SearchFilterBase`) **done, merged**; frontend half (`useListControls` → `ListPage`) **planned** (`ARCHITECTURE_REFACTOR_PLAN.md` F1), not started
+- [ ] Card 7 — single frontend `can()` RBAC helper (role × action × resource) — **planned** (F2), not started
+- [ ] Card 8 — split monolithic pages (`Encounters.tsx` etc.) into composable form/list/detail sub-components — **planned** (F3, folds in F5), not started
+- [x] Card 9 — `docker-compose.prod.yml` extends/merges the dev compose instead of near-duplicating it — **merged to infra `dev` (`c08b522`)**
+- [x] Card 10 — per-repo CI (backend pytest+check, frontend vitest+`tsc -b && vite build`, infra compose config validation) — **merged to all three `dev` branches** (backend `cecaa29`, frontend `0bdfe36`, infra `c08b522`)
 
 **Definition of done (per item):** implemented on a short-lived branch off `dev`, merged into `dev`, tests green, manual QA pass. Items don't need to land all at once — `dev` → `main` can happen once the sprint's items (or a safe subset) are verified together.
 
-**Next action for continuation:** merge the three feature branches into each repo's `dev` (infra: `feature/card9-10-compose-ci`; backend/frontend: `feature/card10-ci`), then proceed to Cards 6-8 (all frontend-heavy; Card 6's backend half is the only backend work in the sprint).
+**Next action for continuation:** Cards 9+10 are fully merged in all three repos — `dev` → `main` promotion is unblocked pending a QA pass (see "Suggested Next Steps"). Remaining sprint work is Cards 6 (frontend half)/7/8, all frontend, all with an approved implementation plan (`ARCHITECTURE_REFACTOR_PLAN.md` F1/F2/F3) ready to execute in that order — F1 first (list-page plumbing, no RBAC change), F2 second (RBAC policy change, several intentional behavior changes already approved), F3 last (page splits, consumes F1's `ListPage` and F2's `can()`).
 
 ---
 
