@@ -135,6 +135,35 @@ volumes); `docker-compose.override.yml` adds dev-only bind mounts/ports/runserve
 `docker-compose.prod.yml` adds prod-only gunicorn/TLS/cert-init. A topology change goes
 in the base unless it is dev-only or prod-only.
 
+### 5.1 Backup & Restore
+
+All PHI (patient rows, consultation logs, audit entries, clinical images) lives in two
+named Docker volumes — `medicalconsultations_pgdata` (Postgres) and
+`medicalconsultations_media_volume` (uploaded images) — on a single laptop-class host with
+no other redundancy. `infra/scripts/backup_db.ps1` / `restore_db.ps1` are the only backup
+interface; there is no automatic scheduling yet (run manually, or wire into Windows Task
+Scheduler / cron if this stack starts holding real data).
+
+- **Backup:** `infra/scripts/backup_db.ps1 [-RetentionDays 14] [-BackupDir infra/backups]`
+  — `pg_dump -Fc` (self-contained: embeds the full schema, not just data) plus a `tar.gz`
+  of the media volume, both timestamped into `infra/backups/` (gitignored — dump files are
+  decrypted-at-rest PHI and need the same access control as the production database
+  itself). Files older than `-RetentionDays` are pruned automatically.
+- **Restore:** `infra/scripts/restore_db.ps1 -DumpFile <path> [-MediaArchive <path>] -Confirm`
+  — destructive (`pg_restore --clean --if-exists`), refuses to run without `-Confirm`.
+- **Two caveats after any restore:**
+  1. **Schema drift.** A backup is never "invalidated" by later migrations — `pg_dump -Fc`
+     captures the schema as it stood at dump time. But *restoring* an old dump rolls the
+     schema back to that point: migrations run after the backup (including data-backfill
+     migrations, e.g. `patients` 0003-0005's helper-column backfills) are lost and must be
+     re-applied with `python manage.py migrate` before the app is trusted again.
+  2. **`PII_FIELD_KEY` era.** If the key was rotated (`manage.py reencrypt_pii`) between
+     backup and restore, the restored encrypted PII columns are undecryptable under the
+     *current* key (`decrypt_token` fails closed by design). Restore with the key that was
+     active at backup time, or re-run `reencrypt_pii` immediately after restoring.
+- Current hosted data is declared throwaway test data (see repo baseline notes) — this is
+  deliberately the moment to have this seam ready, before real PHI arrives.
+
 ## 6. CI/CD (GitHub Actions)
 
 - Per-repo workflows live next to the code: `backend/.github/workflows/ci.yml`,

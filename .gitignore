@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# local backups (decrypted-at-rest PHI -- never commit)
+backups/
+
 # OS
 Thumbs.db
 .DS_Store
