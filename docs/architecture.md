@@ -126,20 +126,22 @@ and `/media/<path>?token=…` (HMAC-signed token, 1h TTL).
 | `backend` | Django + gunicorn | volumes for dev (runserver)             |
 | `frontend`| Vite dev / nginx  | dev proxy `/api` → backend; prod nginx static + proxy |
 
-Dev mode: `docker compose up`; prod mode: build frontend static, nginx serves it and
-reverse-proxies `/api`.
+Dev mode: `docker compose up` (auto-loads `docker-compose.override.yml`); prod mode:
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` — built frontend
+static, nginx serves it and reverse-proxies `/api`.
 
-Note: dev and prod compose files are hand-maintained parallel files (no `extends`/`include`)
-— a topology change must be made in both `docker-compose.yml` and `docker-compose.prod.yml`.
+Note: dev and prod share a single `docker-compose.yml` base (image, env, healthchecks,
+volumes); `docker-compose.override.yml` adds dev-only bind mounts/ports/runserver and
+`docker-compose.prod.yml` adds prod-only gunicorn/TLS/cert-init. A topology change goes
+in the base unless it is dev-only or prod-only.
 
 ## 6. CI/CD (GitHub Actions)
 
-- Workflows live in `infra/.github/workflows/` and cross-checkout the `backend` and
-  `frontend` repos. **They trigger on pushes to the infra repo's `main`** — a push to
-  the backend or frontend repo does not fire the gate that tests them (known limitation
-  of the three-repo layout; per-repo workflows are the intended fix).
-- **Backend CI:** runs `manage.py check` + pytest (job is named "Lint, check & test"
-  but performs no lint step).
-- **Frontend CI:** runs `npm ci` + `npm run build` (type-check + vite build). vitest is
-  not run in CI.
+- Per-repo workflows live next to the code: `backend/.github/workflows/ci.yml`,
+  `frontend/.github/workflows/ci.yml`, `infra/.github/workflows/ci.yml`. Each triggers on
+  pushes and PRs to `dev`/`main` — a push to any repo fires its own gate.
+- **Backend CI:** `manage.py check` + pytest.
+- **Frontend CI:** `npm ci` + `npm run build` (type-check + vite build) + vitest.
+- **Infra CI:** validates both dev (`docker-compose.yml` + override) and prod
+  (`docker-compose.yml` + `docker-compose.prod.yml`) compose configs.
 - **CD:** build & tag Docker images; (later) push to registry / deploy to laptop.

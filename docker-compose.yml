@@ -1,16 +1,16 @@
+# Base compose — shared service definitions for dev and prod.
+# Dev: `docker compose up -d` auto-loads docker-compose.override.yml.
+# Prod: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
 name: medicalconsultations
 
 services:
   db:
     image: postgres:16-alpine
-    container_name: mc_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,10 +21,7 @@ services:
 
   cache:
     image: redis:7-alpine
-    container_name: mc_cache
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -33,7 +30,6 @@ services:
 
   backend:
     build: ../backend
-    container_name: mc_backend
     restart: unless-stopped
     env_file:
       - .env
@@ -41,13 +37,7 @@ services:
       POSTGRES_HOST: db
       REDIS_URL: redis://cache:6379/0
     volumes:
-      - ../backend:/app
       - media_volume:/app/media
-    ports:
-      - "8000:8000"
-    command: >
-      sh -c "python manage.py migrate --noinput &&
-             python manage.py runserver 0.0.0.0:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -56,16 +46,7 @@ services:
 
   frontend:
     build: ../frontend
-    container_name: mc_frontend
     restart: unless-stopped
-    environment:
-      PROXY_TARGET: http://backend:8000/api
-    volumes:
-      - ../frontend:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
-    command: npm run dev -- --host 0.0.0.0
     depends_on:
       - backend
 

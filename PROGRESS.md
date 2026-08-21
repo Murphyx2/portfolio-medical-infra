@@ -9,14 +9,14 @@
 > you need the story behind a specific past decision — everything load-bearing for day-to-day work
 > is condensed into this file already.
 
-**Read order for a continuation session:** [Current State](#current-state-as-of-2026-08-15) →
+**Read order for a continuation session:** [Current State](#current-state-as-of-2026-08-20) →
 [Behavioral Invariants](#behavioral-invariants-do-not-regress) → [Data Model](#data-model-entities--design-intent)
 → everything else as needed. Current State is placed right after the Overview (not at the end) so
 it's the first thing an AI model sees after the one-paragraph project summary.
 
 ## Table of Contents
 - [Overview](#overview)
-- [Current State (as of 2026-08-15)](#current-state-as-of-2026-08-15)
+- [Current State (as of 2026-08-20)](#current-state-as-of-2026-08-20)
 - [Roles](#roles)
 - [Core Modules](#core-modules)
 - [Data Model (entities & design intent)](#data-model-entities--design-intent)
@@ -39,23 +39,25 @@ is handled under international security standards.
 
 ---
 
-## Current State (as of 2026-08-15)
+## Current State (as of 2026-08-20)
 
-Architecture-review Cards P0+P1 and 2+4+5 are done, merged, deployed (backend `25e5dc1`, tests **355 passed**); Cards 6-10 are the remaining backlog (see "Architecture Review Cards" below). Docs updated (infra `29cb209`). Live-stack masking/scoping smoke-verified 2026-08-15 (admin full PII, IT/CM masked, receptionist M-03 doctor-contact, `active` read-only for non-admins, doctor scoped to own/centers).
+Backend and frontend `dev` branches carry work **beyond** what `main` (production) has — `main` is the last released snapshot; `dev` accumulates sprint work. Cards 9+10 are implemented on **unmerged feature branches** (see "In-flight branches" below). Test counts verified 2026-08-20: backend **368 passed**, frontend **48 passed** + clean build.
 
-### Repos & latest commits
-| Repo       | Path       | Latest commit |
-|------------|------------|----------------|
-| infra      | `infra/`   | `29cb209` (architecture doc) |
-| backend    | `backend/` | `25e5dc1` (merge of `core-ownership-pass`: cards 2+4+5) |
-| frontend   | `frontend/`| `a3c4362` |
+### What's on which branch (all three repos)
+| Repo | `main` (prod, released) | `dev` (integration, ahead of main) | In-flight feature branches (NOT merged) |
+|------|--------------------------|-------------------------------------|------------------------------------------|
+| infra | `c806327` (branching workflow + Sprint 1 opened) | `d1b5469` (PROGRESS.md AI-readable reformat) | `feature/card9-10-compose-ci` → `2f20c2d` (Card 9 compose + Card 10 CI) |
+| backend | `25e5dc1` (cards 2+4+5 merge) | `a91e88e` (doctor-services M2M, architecture-cleanup, Postgres audit fixes) | `feature/card10-ci` → `b0c3b12` |
+| frontend | `a3c4362` (encounters merge) | `9e110a7` (1 commit ahead of `origin/dev`: button/typography polish) | `feature/card10-ci` → `1cac207` |
+
+**Next step for a continuation session:** merge the three in-flight branches into their repos' `dev` (infra `feature/card9-10-compose-ci`, backend+frontend `feature/card10-ci`), re-run the tests, then `dev` → `main`. Do NOT touch `main` directly.
 
 ### Design-system artifacts (project root, not in any of the 3 git repos)
-`PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten.
+`PRODUCT.md`, `DESIGN.md`, `.impeccable/` (sidecar `design.json` + `critique/*.md` snapshots), and `LOGO ACTUAL.jpg` live at the repo-bundle root, **outside all three tracked repos** — the root itself isn't a git repo, so these are local-only unless separately backed up. Written/maintained via the `impeccable` skill (`$impeccable init`/`document`/`critique`). Current design system: "The Quiet Clinic" (Clinical Green + Slate Blue, system-ui only). Latest critique scores (2026-08-12, all "Acceptable, low end"): Dashboard 16/40, Patients 20/40, Doctors 20/40 — see `.impeccable/critique/` for full reports; their shared P0s (native `window.confirm`/`alert` instead of the app's own `Dialog`, Dashboard's broken today-count query, Doctors' `contact_email` masking) are fixed as of the commits above. Remaining P1-P3 backlog (user-picker sublabels, doctor schedule/center-binding UI, per-role dashboard content) is intentionally deferred, not forgotten. A consolidated app-wide critique ran 2026-08-20 (score 24/40, slug `frontend-all-pages-consolidated`) — its P1s (Encounters date-filter hides data, no save-success feedback, ungrouped sidebar) are a candidate next polish target.
 
 ### Architecture Review Cards (2026-08-13 risk assessment — pending/some complete)
 
-Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra and are the **current backlog**.
+Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Cards 2/4/5 done as of `25e5dc1`); Cards 6-10 = frontend/infra. **Status 2026-08-20: Cards 1-5 done & merged; Cards 9+10 done on unmerged feature branches; Cards 6-8 remain open.**
 
 - [x] **P0 / Card 1** — Restore RBAC invariant: `AuditMixin.restore` now admin-only via `permission_denied` (not `check_permissions`); removed the `action != "restore"` workarounds; `DoctorSchedule` restore gated with `CanViewInactive`. Regression matrix in `backend/tests/test_soft_delete.py`. (backend `9706c34`, merged `7137d84`)
 - [x] **P1 / Card 3** — `RoomType` wired into signal-based cache invalidation (`core/caching.py` `_CACHE_INVALIDATION_MAP`, `core/signals.py`). Regression test `test_room_type_list_cached_and_invalidated`. (same merge)
@@ -65,8 +67,8 @@ Backend-centric list from the architecture evaluation. Cards P0-P5 = backend (Ca
 - [ ] **Card 6** — Frontend: deepen `useListControls` so all tables share the same search/sort/pagination; backend search via a common filterset base (today patients/records/encounters each re-implement it).
 - [ ] **Card 7** — Frontend RBAC: single `can()` helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks in pages; render page/section/button by capability.
 - [ ] **Card 8** — Monolith page split: extract `Encounters.tsx` (and other giant pages) into composable sub-components (form/list/detail).
-- [ ] **Card 9** — Compose single-source: refactor `docker-compose.prod.yml` to extend/merge the dev compose instead of a near-duplicate (nginx/cert-init/TLS stay prod-only).
-- [ ] **Card 10** — CI: per-repo GitHub Actions (backend pytest+check; frontend vitest + `tsc -b && vite build`; infra compose config validation).
+- [x] **Card 9** — Compose single-source: `docker-compose.yml` is now the shared base (image/env/healthchecks/volumes); `docker-compose.override.yml` carries dev-only bind mounts/ports/runserver; `docker-compose.prod.yml` merges prod-only gunicorn/TLS/cert-init. Commands: dev `docker compose up -d`, prod `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`. `.env.example` reconciled (JWT_REFRESH 7→3, PROXY_TARGET note). **On infra `feature/card9-10-compose-ci` (`2f20c2d`) — NOT yet merged to `dev`.**
+- [x] **Card 10** — Per-repo CI: `backend/.github/workflows/ci.yml` (check+pytest), `frontend/.github/workflows/ci.yml` (ci+build+vitest), `infra/.github/workflows/ci.yml` (compose config validation). All trigger on `dev`/`main` push + PR + `workflow_dispatch`. Old cross-repo workflows in `infra/.github/workflows/` deleted. **On backend+frontend `feature/card10-ci` (`b0c3b12`/`1cac207`) and infra `feature/card9-10-compose-ci` — NOT yet merged to `dev`.**
 
 ### Frontend Polish Pass (`$impeccable polish frontend/src/pages`) — todo list (2026-08-15)
 
@@ -83,11 +85,11 @@ Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement
 
 ### Runbook
 - Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
-- Backend tests: `pytest` (from `backend/`; last verified **355 passed**, 2026-08-15).
-- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **44 passed**, 2026-08-12).
+- Backend tests: `pytest` (from `backend/`; last verified **368 passed**, 2026-08-20).
+- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **48 passed**, 2026-08-20).
 - Swagger UI: `http://localhost:8000/api/docs/` · Schema: `http://localhost:8000/api/schema/` · Health: `http://localhost:8000/api/health/`
 - App: `http://localhost:5173` — Vite proxies `/api` and `/media` to the backend.
-- Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by `cert-init`; browser warns until real certs are mounted).
+- Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by `cert-init`; browser warns until real certs are mounted).
 - Live QA smoke scripts (from host): `qa_full_verification.ps1`, `qa_integration_smoke.ps1`, `infra\scripts\qa_e2e_verification.py` — all green as of 2026-08-10. **Wait ~70s between runs** (login-throttle, see pitfalls below).
 
 ### Known pitfalls (read before touching related code)
@@ -298,14 +300,16 @@ All three repos (`backend/`, `frontend/`, `infra/`) now use a two-track branchin
 
 **Goal:** close out the deferred frontend/infra Architecture Review backlog (Cards 6-10, see "Architecture Review Cards" under Current State above — this section tracks the same items as a sprint, not a duplicate list).
 
-**Backlog:**
-- Card 6 — shared `useListControls` + common backend filterset base (search/sort/pagination consolidation across patients/records/encounters)
-- Card 7 — single frontend `can()` RBAC helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks
-- Card 8 — split monolithic pages (`Encounters.tsx` etc.) into composable form/list/detail sub-components
-- Card 9 — `docker-compose.prod.yml` extends/merges the dev compose instead of near-duplicating it
-- Card 10 — per-repo CI (backend pytest+check, frontend vitest+`tsc -b && vite build`, infra compose config validation)
+**Backlog status (2026-08-20):**
+- [ ] Card 6 — shared `useListControls` + common backend filterset base (search/sort/pagination consolidation across patients/records/encounters)
+- [ ] Card 7 — single frontend `can()` RBAC helper (role × action × resource) replacing ad-hoc `role === 'doctor'` checks
+- [ ] Card 8 — split monolithic pages (`Encounters.tsx` etc.) into composable form/list/detail sub-components
+- [x] Card 9 — `docker-compose.prod.yml` extends/merges the dev compose instead of near-duplicating it — **implemented on infra `feature/card9-10-compose-ci`, awaiting merge to `dev`**
+- [x] Card 10 — per-repo CI (backend pytest+check, frontend vitest+`tsc -b && vite build`, infra compose config validation) — **implemented on backend+frontend `feature/card10-ci` + infra `feature/card9-10-compose-ci`, awaiting merge to `dev`**
 
 **Definition of done (per item):** implemented on a short-lived branch off `dev`, merged into `dev`, tests green, manual QA pass. Items don't need to land all at once — `dev` → `main` can happen once the sprint's items (or a safe subset) are verified together.
+
+**Next action for continuation:** merge the three feature branches into each repo's `dev` (infra: `feature/card9-10-compose-ci`; backend/frontend: `feature/card10-ci`), then proceed to Cards 6-8 (all frontend-heavy; Card 6's backend half is the only backend work in the sprint).
 
 ---
 
@@ -318,7 +322,7 @@ All three repos (`backend/`, `frontend/`, `infra/`) now use a two-track branchin
 6. Consider trigram indexes for Medicine/ARS `search_fields` if those lists grow large (both already cached, so this is a `search=` latency concern only).
 7. **Sticky table headers (deferred):** needs `.data-table` to own its own bounded `max-height` + `overflow-y: auto` instead of tracking whole-page scroll — a real UX decision, not a CSS one-liner. See `PROGRESS_LOG.md` 2026-08-10 entry for why the naive fix doesn't work.
 8. **`theme/palette.ts` is dead code** with stale colors (pre-contrast-fix `#66BB6A`) — delete, or sync to `index.css`'s current tokens if a JS-side color source is ever needed.
-9. CI workflows in `infra/.github/workflows/` may reference stale repo names — verify against `Murphyx2/MedicalConsultation-{backend,frontend,infra}`.
+9. ~~CI workflows in `infra/.github/workflows/` may reference stale repo names~~ — **resolved 2026-08-20 by Card 10**: workflows moved per-repo, no cross-checkout, so repo names are implicit (each repo's own workflow). See `backend/.github/workflows/ci.yml`, `frontend/.github/workflows/ci.yml`, `infra/.github/workflows/ci.yml`.
 10. **Soft-delete follow-ups (deferred, 2026-08-11 pass):** no restore UI yet for `ConsultationLog`/`RecordImage` (no dedicated list view exists) or `DoctorSchedule`/`DoctorCenterBinding` (API supports restore, frontend doesn't surface it) — low priority since the nested-prefetch limitation (Known Pitfalls) already blocks seeing inactive children of a record/ARS from the parent view anyway.
 
 ## Color Palette (BluePalette.png)
