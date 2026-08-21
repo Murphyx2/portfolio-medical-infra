@@ -123,8 +123,8 @@ and `/media/<path>?token=…` (HMAC-signed token, 1h TTL).
 |-----------|-------------------|-----------------------------------------|
 | `db`      | postgres:16-alpine| named volume for data                   |
 | `cache`   | redis:7-alpine    | cache + future Celery broker            |
-| `backend` | Django + gunicorn | volumes for dev (runserver)             |
-| `frontend`| Vite dev / nginx  | dev proxy `/api` → backend; prod nginx static + proxy |
+| `backend` | Django + gunicorn | volumes for dev (runserver); whitenoise serves collected static assets in-process (no filesystem/volume needed for `STATIC_ROOT`) |
+| `frontend`| Vite dev / nginx  | dev proxy `/api` → backend; prod nginx static + proxy. `client_max_body_size 6m` (just above the backend's 5MB record-image cap); `/static/` and `/admin/` proxy to `backend` like `/api/` (both previously fell through to the SPA catch-all) |
 
 Dev mode: `docker compose up` (auto-loads `docker-compose.override.yml`); prod mode:
 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` — built frontend
