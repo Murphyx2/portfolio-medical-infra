@@ -49,9 +49,21 @@ is handled under international security standards.
 
 ---
 
-## Current State (as of 2026-08-20)
+## Current State (as of 2026-08-22)
 
-Backend and frontend `dev` branches carry work **beyond** what `main` (production) has — `main` is the last released snapshot; `dev` accumulates sprint work. Cards 9+10 (infra compose + per-repo CI) are now merged into all three `dev` branches. Test counts verified 2026-08-20 (evening, after `ARCHITECTURE_REFACTOR_PLAN.md` items B1/B2/B3/B4/B5/B6/B7/B8/B9 + Cards 9/10 merges): backend **456 passed**, frontend **48 passed** + clean build. No in-flight feature branches remain unmerged in any repo as of this update.
+Backend and frontend `dev` branches carry work **beyond** what `main` (production) has — `main` is the last released snapshot; `dev` accumulates sprint work. Cards 9+10 (infra compose + per-repo CI) are now merged into all three `dev` branches. Test counts verified 2026-08-22 (after the Admin Settings Page feature below): backend **506 passed**, frontend **48 passed** + clean build. No in-flight feature branches remain unmerged in any repo as of this update.
+
+### Admin Settings Page (2026-08-22, `SETTINGS_PAGE_PLAN.md` — Implemented)
+
+New backend app `apps/systemsettings` (singleton `SystemSettings(pk=1)`) makes 11 previously hardcoded/env-var-only operational parameters runtime-editable by ADMIN (IT gets read-only): login lockout threshold/duration, password min length, JWT access/refresh token lifetimes, login/anon/user rate limits, max image upload size, media-token TTL, default page size.
+
+- **Read path**: `apps/systemsettings/services.py::get_settings()` — cached (Redis/LocMemCache), invalidated both by a `post_save` signal and a ~60s TTL backstop (self-heals a missed invalidation), falls back to hardcoded defaults if the DB read itself fails.
+- **Consumers rewired**: `LoginView` lockout + `SettingsLoginRateThrottle`/`SettingsAnonRateThrottle`/`SettingsUserRateThrottle` (`apps/core/throttling.py`, `get_rate()` override) + JWT lifetimes (`apps/accounts/tokens.py::SettingsAccessToken`/`SettingsRefreshToken`, `lifetime` as a `@property` so it's re-evaluated per token issuance, not frozen at import) + `SettingsMinimumLengthValidator` (replaces Django's `MinimumLengthValidator` in `AUTH_PASSWORD_VALIDATORS`) + `RecordImageSerializer.validate_image` (was a hardcoded 5 MB check) + `verify_media_token` TTL + `DefaultPagination.get_page_size`.
+- **API**: `GET/PATCH /api/settings/` (`IsAdminOrITReadOnly`, new permission in `apps/core/permissions.py`) + `POST /api/settings/reset/` (ADMIN-only, distinct `action="SETTINGS_RESET"` audit entry, added to `AuditLog.Action` choices) — lets an admin recover from a bad value (e.g. an overly aggressive lockout) without DB/shell access. Every PATCH logs a changed-field diff via `log_audit`.
+- **New `GET /api/records/upload-limits/`** (`IsAdminDoctorOrNurse`) exposes just `max_image_upload_mb` — doctors/nurses upload record images but can't reach the ADMIN/IT-only `/settings/`, so the frontend pre-check needed a narrower read.
+- **Security-driven range caps** (from the plan's post-review revision): access-token lifetime capped at 5-60 min (access tokens have no revocation on logout, only the refresh token is blacklisted); nginx `client_max_body_size` raised `6m` → `100m` (`frontend/nginx.conf`) to match the top of the 1-100 MB upload range.
+- **Frontend**: `pages/Settings.tsx` (grouped sections, range helper text, security-tradeoff warning callouts on the access-token and media-token TTL fields, unsaved-change dot, read-only badge for IT, reset-to-defaults behind `ConfirmDialog`), `services/settings.ts`, `utils/can.ts` `"settings"` resource (`view: ADMIN/IT`, `edit: ADMIN`), nav entry + route. Passed through the `impeccable` skill's mechanical detector (one side-tab-border finding, fixed).
+- Tests: `backend/tests/test_systemsettings.py` (25 tests — RBAC matrix, range validation, cache invalidation + DB-failure fallback, reset action + distinct audit entry, runtime enforcement per setting including a live JWT-lifetime decode check). Two pre-existing query-count tests (`test_caching.py`, `test_patients.py`) were adjusted to prime the settings cache outside their measured block, since every request now touches it once via the throttle classes.
 
 ### What's on which branch (all three repos)
 | Repo | `main` (prod, released) | `dev` (integration, ahead of main) | In-flight feature branches |
@@ -95,8 +107,8 @@ Queued via the `impeccable` skill; playbook is `reference/polish.md`. Refinement
 
 ### Runbook
 - Start stack: `docker compose up -d` (from `infra/`). Services: `mc_db`, `mc_cache`, `mc_backend`, `mc_frontend`. **After pulling backend changes that add migrations, restart the backend container** — bind-mounted code hot-reloads, but `migrate` only runs at container startup.
-- Backend tests: `pytest` (from `backend/`; last verified **456 passed**, 2026-08-20 evening).
-- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **48 passed**, 2026-08-20 evening).
+- Backend tests: `pytest` (from `backend/`; last verified **506 passed**, 2026-08-22).
+- Frontend build: `npm run build` (from `frontend/`). Frontend tests: `npm test` (last verified **48 passed**, 2026-08-22).
 - Swagger UI: `http://localhost:8000/api/docs/` · Schema: `http://localhost:8000/api/schema/` · Health: `http://localhost:8000/api/health/`
 - App: `http://localhost:5173` — Vite proxies `/api` and `/media` to the backend.
 - Prod stack (gunicorn, built images, HTTPS-only): `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` (self-signed cert auto-generated by `cert-init`; browser warns until real certs are mounted).
