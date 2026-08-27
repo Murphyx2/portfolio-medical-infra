@@ -204,15 +204,15 @@ st, data = call("POST", "/doctors/profiles/", token=tokens["ADMIN"], body={
     "user": new_doc_user_id, "specialty": "Cardiology", "license_number": f"LIC-QA2-{RUN}"})
 report("doctor profile without contact_phone -> 400", st == 400, f"status={st}")
 
-# 9) masked phone for IT/CM (mask pattern from PatientSerializer._mask: 2 + 4 bullets + 2)
+# 9) masked phone for IT (mask pattern from PatientSerializer._mask: 2 + 4 bullets + 2);
+# CENTER_MANAGER is admin-equivalent app-wide except Settings edit, so it sees full digits.
 st_it, d_it = call("GET", f"/patients/{patch_id}/", token=tokens["IT"])
 st_cm, d_cm = call("GET", f"/patients/{patch_id}/", token=tokens["CENTER_MANAGER"])
-masked_ok = (
-    d_it.get("phone", "").count(MASK) == 4 and d_cm.get("phone", "").count(MASK) == 4
-    and d_it.get("phone") == d_cm.get("phone")
-)
-report("IT/CM see masked phone (not mangled, 4 bullets)", masked_ok,
-       f"IT={d_it.get('phone')} CM={d_cm.get('phone')} raw=8295550199")
+masked_ok = d_it.get("phone", "").count(MASK) == 4
+report("IT sees masked phone (not mangled, 4 bullets)", masked_ok,
+       f"IT={d_it.get('phone')} raw=8295550199")
+report("CENTER_MANAGER sees full phone digits", st_cm == 200 and d_cm.get("phone") == "8295550199",
+       f"CM={d_cm.get('phone')}")
 
 # 10) doctor sees full digits
 st, d_doc = call("GET", f"/patients/{patch_id}/", token=tokens["DOCTOR"])
@@ -313,16 +313,18 @@ doc_profile_id = doc_profile.get("id")
 
 ROLES = ["ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE", "IT", "CENTER_MANAGER"]
 # (endpoint, GET_allowed, POST_allowed)  GET_allowed: set of roles with read access
+# CENTER_MANAGER is admin-equivalent app-wide except Settings edit, so it's
+# added to every POST_allowed set below that ADMIN itself is in.
 matrix = [
-    ("/auth/users/",          {"ADMIN", "IT"}, {"ADMIN", "IT"}),
-    ("/centers/",             "all", {"ADMIN", "IT"}),
-    ("/medicines/",           "all", {"ADMIN", "IT"}),
-    ("/doctors/profiles/",    "all", {"ADMIN", "IT"}),
-    ("/patients/",            "all", {"ADMIN", "DOCTOR", "RECEPTIONIST"}),
-    ("/medical-records/",     "all", {"ADMIN", "DOCTOR", "NURSE"}),
-    ("/consultation-logs/",   "all", {"ADMIN", "DOCTOR", "NURSE"}),
-    ("/appointments/",        "all", {"ADMIN", "DOCTOR", "RECEPTIONIST"}),
-    ("/ars/",                 "all", {"ADMIN", "RECEPTIONIST"}),
+    ("/auth/users/",          {"ADMIN", "IT"}, {"ADMIN", "IT", "CENTER_MANAGER"}),
+    ("/centers/",             "all", {"ADMIN", "IT", "CENTER_MANAGER"}),
+    ("/medicines/",           "all", {"ADMIN", "IT", "CENTER_MANAGER"}),
+    ("/doctors/profiles/",    "all", {"ADMIN", "IT", "CENTER_MANAGER"}),
+    ("/patients/",            "all", {"ADMIN", "DOCTOR", "RECEPTIONIST", "CENTER_MANAGER"}),
+    ("/medical-records/",     "all", {"ADMIN", "DOCTOR", "NURSE", "CENTER_MANAGER"}),
+    ("/consultation-logs/",   "all", {"ADMIN", "DOCTOR", "NURSE", "CENTER_MANAGER"}),
+    ("/appointments/",        "all", {"ADMIN", "DOCTOR", "RECEPTIONIST", "CENTER_MANAGER"}),
+    ("/ars/",                 "all", {"ADMIN", "RECEPTIONIST", "CENTER_MANAGER"}),
 ]
 # payload builders (unique per endpoint/role to avoid unique-constraint 400s)
 def post_payload(endpoint, role, seq):
@@ -385,12 +387,14 @@ st, data = call("POST", "/medical-records/", token=tokens["DOCTOR"], body={
 rec_id = data.get("id")
 report("record created by doctor", st == 201, f"status={st} id={rec_id}")
 rec_read_fail = []
-MASKED_ROLES = ("IT", "CENTER_MANAGER")
+# CENTER_MANAGER is admin-equivalent app-wide except Settings edit, so it
+# sees full (unmasked) names, unlike IT.
+MASKED_ROLES = ("IT",)
 for role in ROLES:
     st, data = call("GET", f"/medical-records/{rec_id}/", token=tokens[role])
     name = data.get("patient_info", {}).get("full_name")
-    # H-04/M-05: IT and CENTER_MANAGER see masked names (still navigable click path);
-    # the other roles see the full name.
+    # H-04/M-05: IT sees masked names (still navigable click path); the
+    # other roles see the full name.
     if role in MASKED_ROLES:
         name_ok = (name is not None) and (name != "Fon Tono") and ("\u2022" in name)
     else:
@@ -414,8 +418,10 @@ report("record clinical fields masked for IT, full for doctor",
 
 # ---------------------------------------------------------------- PII masking
 print("--- PII masking ---")
-full_roles = ["ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"]
-mask_roles = ["IT", "CENTER_MANAGER"]
+# CENTER_MANAGER is admin-equivalent app-wide except Settings edit, so it
+# sees full PII, unlike IT.
+full_roles = ["ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE", "CENTER_MANAGER"]
+mask_roles = ["IT"]
 pii_fail = []
 st, d_rec = call("GET", f"/patients/{patch_id}/", token=tokens["RECEPTIONIST"])
 raw_email = d_rec.get("email")

@@ -156,13 +156,14 @@ $matrix = @(
     @{ role="IT";        url="$base/medical-records/";    method="POST"; expected="403" },
     @{ role="IT";        url="$base/appointments/";       method="POST"; expected="403" },
     @{ role="IT";        url="$base/bindings/";           method="POST"; expected="403" },
+    # CENTER_MANAGER is admin-equivalent app-wide except Settings edit.
     @{ role="CENTER_MANAGER"; url="$base/centers/";       method="GET";  expected="200" },
     @{ role="CENTER_MANAGER"; url="$base/patients/";      method="GET";  expected="200" },
-    @{ role="CENTER_MANAGER"; url="$base/patients/";      method="POST"; expected="403" },
-    @{ role="CENTER_MANAGER"; url="$base/medical-records/"; method="POST"; expected="403" },
-    @{ role="CENTER_MANAGER"; url="$base/appointments/";  method="POST"; expected="403" },
-    @{ role="CENTER_MANAGER"; url="$base/auth/users/";    method="GET";  expected="403" },
-    @{ role="CENTER_MANAGER"; url="$base/medicines/";     method="POST"; expected="403" }
+    @{ role="CENTER_MANAGER"; url="$base/patients/";      method="POST"; expected="201" },
+    @{ role="CENTER_MANAGER"; url="$base/medical-records/"; method="POST"; expected="201" },
+    @{ role="CENTER_MANAGER"; url="$base/appointments/";  method="POST"; expected="201" },
+    @{ role="CENTER_MANAGER"; url="$base/auth/users/";    method="GET";  expected="200" },
+    @{ role="CENTER_MANAGER"; url="$base/medicines/";     method="POST"; expected="201" }
 )
 
 # resolve a real doctor profile id for appointment/schedule/binding payloads
@@ -223,7 +224,8 @@ foreach ($m in $matrix) {
 Report "RBAC matrix total" ($fail -eq 0) ("{0} passed, {1} failed" -f $pass, $fail)
 
 # ---------------------------------------------------------------
-# PHASE B: PII masking (IT + CENTER_MANAGER masked; DOCTOR, NURSE, ADMIN, RECEPTIONIST full)
+# PHASE B: PII masking (IT masked; CENTER_MANAGER (admin-equivalent),
+# DOCTOR, NURSE, ADMIN, RECEPTIONIST full)
 # ---------------------------------------------------------------
 Write-Output "=== PHASE B: PII masking ==="
 $itPat = Call "Get" "$base/patients/$patId/" $null $tokens["IT"]
@@ -232,11 +234,11 @@ $cmPat = Call "Get" "$base/patients/$patId/" $null $tokens["CENTER_MANAGER"]
 $recPat = Call "Get" "$base/patients/$patId/" $null $tokens["RECEPTIONIST"]
 $itMasked = ($itPat.data.phone -notmatch "8095550100") -and ($itPat.data.phone -ne "8095550100") -and ($itPat.data.email -ne "ana.perez@example.com")
 $docFull = ($docPat.data.phone -eq "8095550100") -and ($docPat.data.email -eq "ana.perez@example.com")
-$cmMasked = ($cmPat.data.phone -ne "8095550100") -and ($cmPat.data.email -ne "ana.perez@example.com")
+$cmFull = ($cmPat.data.phone -eq "8095550100") -and ($cmPat.data.email -eq "ana.perez@example.com")
 $recFull = ($recPat.data.phone -eq "8095550100") -and ($recPat.data.email -eq "ana.perez@example.com")
 Report "PII: IT masked" $itMasked ("IT phone={0} email={1}" -f $itPat.data.phone, $itPat.data.email)
 Report "PII: doctor full" $docFull ("DOC phone={0} email={1}" -f $docPat.data.phone, $docPat.data.email)
-Report "PII: center_manager masked" $cmMasked ("CM phone={0} email={1}" -f $cmPat.data.phone, $cmPat.data.email)
+Report "PII: center_manager full" $cmFull ("CM phone={0} email={1}" -f $cmPat.data.phone, $cmPat.data.email)
 Report "PII: receptionist full" $recFull ("REC phone={0} email={1}" -f $recPat.data.phone, $recPat.data.email)
 
 # ---------------------------------------------------------------

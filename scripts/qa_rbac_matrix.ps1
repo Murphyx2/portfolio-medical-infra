@@ -111,7 +111,8 @@ $matrix = @(
     @{ role="IT"; url="$base/medicines/"; method="POST"; expected="201" },
     @{ role="IT"; url="$base/patients/"; method="POST"; expected="403" },
     @{ role="CENTER_MANAGER"; url="$base/centers/"; method="GET"; expected="200" },
-    @{ role="CENTER_MANAGER"; url="$base/patients/"; method="POST"; expected="403" }
+    # CENTER_MANAGER is admin-equivalent app-wide except Settings edit.
+    @{ role="CENTER_MANAGER"; url="$base/patients/"; method="POST"; expected="201" }
 )
 
 $payloads = @{
@@ -150,7 +151,8 @@ foreach ($m in $matrix) {
 Write-Output ("RBAC matrix: {0} passed, {1} failed" -f $pass, $fail)
 
 Write-Output "=== PII masking by role (H-04) ==="
-# IT, CENTER_MANAGER -> masked; DOCTOR, NURSE, ADMIN, RECEPTIONIST -> full
+# IT -> masked; CENTER_MANAGER (admin-equivalent), DOCTOR, NURSE, ADMIN,
+# RECEPTIONIST -> full
 function Test-Masking($roleKey, $expectFull) {
     $d = (Call "Get" "$base/patients/$patId/" $null $tokens[$roleKey]).data
     $masked = ($d.phone -ne "8095550100") -and ($d.email -ne "ana.perez@example.com") -and ($d.address -ne "123 Main St, Springfield")
@@ -160,7 +162,8 @@ function Test-Masking($roleKey, $expectFull) {
 }
 $maskingPass = 0; $maskingFail = 0
 foreach ($t in @(
-    @{ role="IT"; full=$false }, @{ role="CENTER_MANAGER"; full=$false },
+    @{ role="IT"; full=$false },
+    @{ role="CENTER_MANAGER"; full=$true },
     @{ role="RECEPTIONIST"; full=$true }, @{ role="DOCTOR"; full=$true }, @{ role="NURSE"; full=$true }, @{ role="ADMIN"; full=$true }
 )) {
     $ok = Test-Masking $t.role $t.full
