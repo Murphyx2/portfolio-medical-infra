@@ -31,6 +31,13 @@ services:
              python manage.py collectstatic --noinput &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
 
+  communications_worker:
+    container_name: mc_prod_communications_worker
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DJANGO_DEBUG: "false"
+      REDIS_URL: redis://:${REDIS_PASSWORD}@cache:6379/0
+
   cert-init:
     image: alpine:3.20
     container_name: mc_prod_cert_init
