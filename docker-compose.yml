@@ -50,6 +50,35 @@ services:
     depends_on:
       - backend
 
+  # Comunicaciones has no message broker (no Celery/Django-Q in this repo --
+  # see CLAUDE.md) -- staff email and patient WhatsApp sends, plus the
+  # appointment-reminder scan, are two idempotent management commands polled
+  # on a short interval instead. `|| true` keeps the loop alive across a
+  # transient failure (e.g. backend still mid-migration on first boot).
+  communications_worker:
+    build: ../backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://cache:6379/0
+    volumes:
+      - media_volume:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: >
+      sh -c "while true; do
+               python manage.py send_communications || true;
+               python manage.py send_appointment_reminders || true;
+               sleep 60;
+             done"
+
 volumes:
   pgdata:
   media_volume:

@@ -21,6 +21,11 @@ services:
       sh -c "python manage.py migrate --noinput &&
              python manage.py runserver 0.0.0.0:8000"
 
+  communications_worker:
+    container_name: mc_communications_worker
+    volumes:
+      - ../backend:/app
+
   frontend:
     container_name: mc_frontend
     environment:

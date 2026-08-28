@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deploying MedicalConsultations on a Private Network</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --text:#1c2430; --muted:#5b6675;
+    --border:#e2e6ec; --accent:#2461ee; --accent-soft:#eaf0ff;
+    --code-bg:#0f172a; --code-text:#e2e8f0; --warn-bg:#fff4e5; --warn-border:#f0b429;
+    --danger-bg:#fdecec; --danger-border:#e0433f; --tip-bg:#eafaf1; --tip-border:#1fa66a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16px;
+  }
+  .layout{display:flex; max-width:1200px; margin:0 auto;}
+  nav.toc{
+    width:280px; flex-shrink:0; position:sticky; top:0; align-self:flex-start;
+    height:100vh; overflow-y:auto; padding:28px 18px; border-right:1px solid var(--border);
+  }
+  nav.toc h2{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px;}
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:toc;}
+  nav.toc li{margin:0 0 2px;}
+  nav.toc a{
+    display:block; padding:7px 10px; border-radius:8px; color:var(--text);
+    text-decoration:none; font-size:14px;
+  }
+  nav.toc a:hover{background:var(--accent-soft); color:var(--accent);}
+  main{flex:1; padding:40px 48px 80px; min-width:0;}
+  .doc-header{margin-bottom:8px;}
+  .doc-header h1{font-size:2rem; margin:0 0 6px; letter-spacing:-.01em;}
+  .doc-header p.lede{color:var(--muted); font-size:1.05rem; margin:0 0 20px; max-width:70ch;}
+  .callout{
+    border-radius:10px; padding:14px 18px; margin:18px 0; border:1px solid;
+    font-size:.95rem;
+  }
+  .callout.note{background:var(--accent-soft); border-color:#bcd2ff;}
+  .callout.warn{background:var(--warn-bg); border-color:var(--warn-border);}
+  .callout.danger{background:var(--danger-bg); border-color:var(--danger-border);}
+  .callout.tip{background:var(--tip-bg); border-color:var(--tip-border);}
+  .callout p:first-child{margin-top:0;} .callout p:last-child{margin-bottom:0;}
+  section{margin:44px 0;}
+  section h2{
+    font-size:1.4rem; margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border);
+    scroll-margin-top:20px;
+  }
+  section h3{font-size:1.1rem; margin:24px 0 10px; scroll-margin-top:20px;}
+  p{margin:0 0 14px;}
+  ul,ol{margin:0 0 14px; padding-left:1.4em;}
+  li{margin:4px 0;}
+  code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:#eef1f6; padding:.15em .4em; border-radius:5px; font-size:.88em;
+  }
+  pre{
+    background:var(--code-bg); color:var(--code-text); padding:16px 18px; border-radius:10px;
+    overflow-x:auto; font-size:.87rem; line-height:1.55; margin:14px 0;
+  }
+  pre code{background:none; padding:0; color:inherit; font-size:1em;}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:.92rem;}
+  th,td{border:1px solid var(--border); padding:8px 12px; text-align:left; vertical-align:top;}
+  th{background:#f0f2f6; font-weight:600;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  a{color:var(--accent);}
+  .step-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:1.6em; height:1.6em; border-radius:50%; background:var(--accent);
+    color:#fff; font-size:.85rem; font-weight:700; margin-right:8px;
+  }
+  .os-tag{
+    display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.05em;
+    text-transform:uppercase; padding:2px 8px; border-radius:6px; margin-bottom:6px;
+  }
+  .os-windows{background:#e5f0ff; color:#1450c9;}
+  .os-linux{background:#eaf7ea; color:#1c7a1c;}
+  footer{color:var(--muted); font-size:.85rem; border-top:1px solid var(--border); padding-top:18px; margin-top:60px;}
+  @media (max-width: 860px){
+    .layout{display:block;}
+    nav.toc{position:static; width:auto; height:auto; border-right:none; border-bottom:1px solid var(--border);}
+    main{padding:28px 20px 60px;}
+  }
+  ::selection{background:#cfe0ff;}
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Table of contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">1. What you're deploying</a></li>
+      <li><a href="#s2">2. Before you start</a></li>
+      <li><a href="#s3">3. Step 1 — Install Docker</a></li>
+      <li><a href="#s4">4. Step 2 — Get the code</a></li>
+      <li><a href="#s5">5. Step 3 — Configure .env</a></li>
+      <li><a href="#s6">6. Step 4 — Find network address</a></li>
+      <li><a href="#s7">7. Step 5 — Start the app</a></li>
+      <li><a href="#s8">8. Step 6 — Create admin account</a></li>
+      <li><a href="#s9">9. Step 7 — Open on the network</a></li>
+      <li><a href="#s10">10. Step 8 — Verify it works</a></li>
+      <li><a href="#s11">11. Day-to-day operation</a></li>
+      <li><a href="#s12">12. Backups</a></li>
+      <li><a href="#s13">13. Troubleshooting</a></li>
+      <li><a href="#s14">14. Security notes</a></li>
+      <li><a href="#s15">15. Appendix — reference</a></li>
+      <li><a href="#s16">16. Configuring Comunicaciones</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="doc-header">
+      <h1>Deploying MedicalConsultations on a Private Network</h1>
+      <p class="lede">A complete, beginner-friendly walkthrough for putting this application on a server inside a private network — reachable by computers and phones on that network, but never the public internet. Windows is the primary path; Linux equivalents follow wherever a step differs.</p>
+    </div>
+
+    <div class="callout note">
+      <p><strong>What "private network" means here:</strong> the server and everyone using the app are on the same local network (office Wi-Fi, building switch, or a VPN behaving like one). Nothing here opens the app to the wider internet, and no step involves port-forwarding on your router. Internet-facing access needs additional work (a domain name, a real TLS certificate, a reviewed firewall/reverse-proxy setup) that is out of scope for this guide.</p>
+    </div>
+
+    <section id="s1">
+      <h2>1. What you're deploying</h2>
+      <p>The application is three things working together, run by <strong>Docker</strong> so you don't have to install Python, Node.js, or a database by hand:</p>
+      <table>
+        <tr><th>Piece</th><th>What it is</th></tr>
+        <tr><td><code>db</code></td><td>Stores all data (patients, records, appointments).</td></tr>
+        <tr><td><code>cache</code></td><td>Speeds things up internally.</td></tr>
+        <tr><td><code>backend</code></td><td>The API — the "brain" of the app.</td></tr>
+        <tr><td><code>frontend</code></td><td>The website your staff sees, served over <strong>HTTPS</strong> with a lock icon (self-signed certificate — see Step 7).</td></tr>
+        <tr><td><code>communications_worker</code></td><td>Sends staff email notices and patient WhatsApp appointment reminders in the background (the "Comunicaciones" module — see <a href="#s16">section 16</a> for production setup).</td></tr>
+      </table>
+      <p>All five run inside <strong>containers</strong> managed together by <strong>Docker Compose</strong>, using one command from a folder called <code>infra/</code>. Once running, anyone on the same private network opens a browser to <code>https://&lt;server's-address&gt;</code>. The database and cache are never reachable from outside the containers — only the website is exposed, and only on the local network.</p>
+    </section>
+
+    <section id="s2">
+      <h2>2. Before you start</h2>
+      <p>You will need:</p>
+      <ul>
+        <li>A server machine that stays powered on (desktop, repurposed PC, or dedicated server) — Windows 10/11/Server, or Linux (this guide uses Ubuntu/Debian commands; other distros are similar but package managers differ).</li>
+        <li>Administrator access (Windows: admin account; Linux: a <code>sudo</code>-capable user).</li>
+        <li>The three project folders — <code>backend</code>, <code>frontend</code>, <code>infra</code> — copyable onto the server.</li>
+        <li>About 30–60 minutes and ~4&nbsp;GB free disk space.</li>
+      </ul>
+      <h3>Words you'll see repeatedly</h3>
+      <ul>
+        <li><strong>Terminal / Command line</strong> — a text window for typing commands. Windows: <strong>PowerShell</strong> (Start menu → search, right-click → "Run as Administrator" when a step needs it). Linux: your distro's Terminal app.</li>
+        <li><strong>IP address</strong> — the "phone number" of a computer on the network, e.g. <code>192.168.1.42</code>. Looked up in Step 4.</li>
+        <li><strong>Container</strong> — a lightweight isolated box running one piece of the app; Docker starts/stops/rebuilds these for you.</li>
+      </ul>
+      <p>Every command is meant to be copied and pasted exactly, except placeholders in <code>&lt;angle brackets&gt;</code> — replace the whole placeholder with your own value.</p>
+    </section>
+
+    <section id="s3">
+      <h2>3. Step 1 — Install Docker</h2>
+      <span class="os-tag os-windows">Windows</span>
+      <ol>
+        <li>Download <strong>Docker Desktop for Windows</strong> from docker.com (or have it installed for you).</li>
+        <li>Run the installer; keep the default <strong>WSL 2</strong> backend option checked.</li>
+        <li>Restart if prompted.</li>
+        <li>Open Docker Desktop once — it must run in the background (whale icon in the system tray).</li>
+        <li>Confirm in PowerShell:
+<pre><code>docker --version
+docker compose version</code></pre>
+        Both should print a version number.</li>
+      </ol>
+      <span class="os-tag os-linux">Linux</span>
+      <ol>
+        <li>Install via the official script:
+<pre><code>curl -fsSL https://get.docker.com | sh</code></pre></li>
+        <li>Add your user to the <code>docker</code> group (log out/in to take effect):
+<pre><code>sudo usermod -aG docker $USER</code></pre></li>
+        <li>Ensure the Compose plugin is present:
+<pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y docker-compose-plugin</code></pre></li>
+        <li>Confirm:
+<pre><code>docker --version
+docker compose version</code></pre></li>
+      </ol>
+      <div class="callout note"><p>Commands always use <code>docker compose</code> (two words) — the modern plugin — never the older standalone <code>docker-compose</code>. Install the plugin above if you only have the old tool.</p></div>
+    </section>
+
+    <section id="s4">
+      <h2>4. Step 2 — Get the code onto the server</h2>
+      <p>The three folders must sit <strong>next to each other</strong> in the same parent folder:</p>
+<pre><code>MedicalConsultations/
+├── backend/
+├── frontend/
+└── infra/        &lt;- you will run all commands from inside here</code></pre>
+      <p><strong>With Git set up:</strong></p>
+<pre><code>git clone &lt;backend-repo-url&gt; backend
+git clone &lt;frontend-repo-url&gt; frontend
+git clone &lt;infra-repo-url&gt; infra</code></pre>
+      <p><strong>Without Git:</strong> copy the three folders (USB drive, network share, however received) into one parent folder, keeping the exact names and sibling layout above.</p>
+      <p>Then move into <code>infra</code> — every later command runs from there:</p>
+<pre><code>cd path/to/MedicalConsultations/infra</code></pre>
+    </section>
+
+    <section id="s5">
+      <h2>5. Step 3 — Configure the environment file</h2>
+      <p>The app reads passwords/settings from <code>.env</code> inside <code>infra/</code>. Never shared or committed to Git — create your own copy per server.</p>
+      <ol>
+        <li>Copy the template — Windows: <code>copy .env.example .env</code> · Linux: <code>cp .env.example .env</code></li>
+        <li>Open <code>.env</code> in a text editor and fill in these values (everything else can stay default):</li>
+      </ol>
+      <table>
+        <tr><th>Variable</th><th>What it's for</th><th>How to set it</th></tr>
+        <tr><td><code>DJANGO_SECRET_KEY</code></td><td>Backend cryptographic key. <strong>Secret.</strong></td><td>Command below</td></tr>
+        <tr><td><code>POSTGRES_PASSWORD</code></td><td>Database password. <strong>Secret.</strong></td><td>Command below</td></tr>
+        <tr><td><code>REDIS_PASSWORD</code></td><td>Cache password, required in this setup. <strong>Secret.</strong></td><td>Command below</td></tr>
+        <tr><td><code>PII_FIELD_KEY</code></td><td>Encrypts patient data at rest. <strong>Secret — see warning below.</strong></td><td>Command below</td></tr>
+        <tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td>Addresses the backend accepts requests for.</td><td>Server IP — Step 4</td></tr>
+        <tr><td><code>DJANGO_CORS_ALLOWED_ORIGINS</code></td><td>Origins allowed to call the API.</td><td><code>https://&lt;server's-address&gt;</code> — Step 4</td></tr>
+        <tr><td><code>TZ</code></td><td>Timezone for dates/timestamps.</td><td>e.g. <code>America/Santo_Domingo</code></td></tr>
+      </table>
+      <p><strong>Generating the three secrets.</strong> If Python is on the server:</p>
+<pre><code># DJANGO_SECRET_KEY
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+
+# PII_FIELD_KEY
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code></pre>
+      <p>If Python isn't installed on the server, use a throwaway container instead (works identically on Windows/Linux):</p>
+<pre><code>docker run --rm python:3.13-alpine python -c "import secrets; print(secrets.token_urlsafe(64))"
+docker run --rm python:3.13-alpine sh -c "pip install -q cryptography && python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""</code></pre>
+      <p>For <code>POSTGRES_PASSWORD</code>/<code>REDIS_PASSWORD</code>, reuse one of the <code>secrets.token_urlsafe(64)</code> outputs, or a password manager's generator.</p>
+<pre><code>DJANGO_SECRET_KEY=the-long-random-string-you-generated
+POSTGRES_PASSWORD=another-long-random-string
+REDIS_PASSWORD=yet-another-long-random-string
+PII_FIELD_KEY=the-fernet-key-you-generated</code></pre>
+      <div class="callout danger">
+        <p><strong>Critical — read before continuing.</strong> Once real patient data exists, <strong><code>PII_FIELD_KEY</code> must never be changed.</strong> Changing it makes every existing patient record permanently unreadable, with no recovery. Set it once correctly before going live, and keep a secure backup of <code>.env</code> (see Backups). If rotation is genuinely needed later, that requires the dedicated <code>reencrypt_pii</code> command — see Troubleshooting.</p>
+        <p>Never commit <code>.env</code> to Git, email it, or store it anywhere but the server and a secure backup.</p>
+      </div>
+    </section>
+
+    <section id="s6">
+      <h2>6. Step 4 — Find the server's network address</h2>
+      <span class="os-tag os-windows">Windows</span>
+<pre><code>ipconfig</code></pre>
+      <p>Look for <code>IPv4 Address</code> under your active adapter, e.g. <code>192.168.1.42</code>.</p>
+      <span class="os-tag os-linux">Linux</span>
+<pre><code>hostname -I
+# or
+ip addr</code></pre>
+      <p>Look for an address starting with <code>192.168.</code>, <code>10.</code>, or <code>172.16.</code>–<code>172.31.</code> — private-network ranges.</p>
+      <p>Fill in <code>.env</code> using that address:</p>
+<pre><code>DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,192.168.1.42
+DJANGO_CORS_ALLOWED_ORIGINS=https://192.168.1.42</code></pre>
+      <div class="callout note"><p>An IP can change after a reboot or router restart. If it does, the app rejects requests for the new address until <code>.env</code> is updated and <code>backend</code> restarted (Day-to-day operation). Ask your network admin about reserving a static/DHCP-lease address for the server.</p></div>
+    </section>
+
+    <section id="s7">
+      <h2>7. Step 5 — Start the application</h2>
+      <p>From <code>infra/</code>:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build</code></pre>
+      <p>This one command: builds everything (first run: several minutes), generates a self-signed HTTPS certificate, sets up the database, and starts all five containers in the background.</p>
+      <p>Watch it come up:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml ps</code></pre>
+      <p>Expect five containers — <code>mc_prod_db</code>, <code>mc_prod_cache</code>, <code>mc_prod_backend</code>, <code>mc_prod_frontend</code>, <code>mc_prod_communications_worker</code> — as <code>running</code>/<code>healthy</code>. If not, check logs:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f backend</code></pre>
+      <p><code>Ctrl+C</code> stops watching logs without stopping the app.</p>
+      <div class="callout tip"><p>If <code>mc_prod_frontend</code> fails the very first time with a missing-certificate error, that's a brief startup race between nginx and the certificate generator. Just re-run the <code>up -d</code> command — safe to run repeatedly.</p></div>
+    </section>
+
+    <section id="s8">
+      <h2>8. Step 6 — Create the admin account</h2>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py create_admin --username admin --email admin@example.com --password "ChangeMe123!"</code></pre>
+      <p>Replace <code>admin</code>, the email, and especially the password with your own values — don't leave the example password in place. You'll use these to log in next.</p>
+    </section>
+
+    <section id="s9">
+      <h2>9. Step 7 — Open it from other computers on the network</h2>
+      <h3>Allow the connection through the firewall</h3>
+      <p>Open ports <strong>443</strong> (HTTPS) and <strong>80</strong> (redirects to 443).</p>
+      <span class="os-tag os-windows">Windows (PowerShell as Administrator)</span>
+<pre><code>New-NetFirewallRule -DisplayName "MedicalConsultations HTTPS" `
+  -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "MedicalConsultations HTTP Redirect" `
+  -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow -Profile Private</code></pre>
+      <span class="os-tag os-linux">Linux (ufw)</span>
+<pre><code>sudo ufw allow 443/tcp
+sudo ufw allow 80/tcp</code></pre>
+      <p>(<code>firewalld</code> instead: <code>sudo firewall-cmd --permanent --add-port=443/tcp --add-port=80/tcp && sudo firewall-cmd --reload</code>.)</p>
+      <div class="callout danger"><p><strong>Never forward these ports on your router.</strong> The rules above only open ports on your local network (<code>-Profile Private</code> keeps Windows off Public/Domain networks too). Port-forwarding on the router exposes the app to the entire internet — this deployment is reviewed for private-network use only.</p></div>
+      <h3>Browse to the app</h3>
+      <p>From another device on the same network:</p>
+<pre><code>https://192.168.1.42</code></pre>
+      <p>(Replace with your server's actual address from Step 4.)</p>
+      <h3>About the "not secure" / certificate warning</h3>
+      <p>Expected — the app uses a self-signed certificate rather than one from a public certificate authority (which needs a public domain name). The connection is still encrypted; the warning only means the browser doesn't recognize the issuer. Safe to proceed on a trusted private network:</p>
+      <ul>
+        <li><strong>Chrome/Edge:</strong> "Advanced" → "Proceed to &lt;address&gt; (unsafe)."</li>
+        <li><strong>Firefox:</strong> "Advanced" → "Accept the Risk and Continue."</li>
+      </ul>
+      <p>Each device shows this once (or after the certificate regenerates). A real certificate for an internal domain can later be mounted in its place — beyond this guide's scope.</p>
+    </section>
+
+    <section id="s10">
+      <h2>10. Step 8 — Verify everything works</h2>
+      <ol>
+        <li>Log in at <code>https://&lt;server-address&gt;</code> with the admin credentials from Step 6.</li>
+        <li>Confirm the health check (from any machine on the network):
+<pre><code>curl -k https://192.168.1.42/api/health/</code></pre>
+        (<code>-k</code> ignores the self-signed certificate warning, same as clicking through it in a browser.)</li>
+        <li>Have another device open the same address and confirm it loads and logs in too.</li>
+      </ol>
+      <p>If all of that works, the deployment is complete and ready for regular use.</p>
+    </section>
+
+    <section id="s11">
+      <h2>11. Day-to-day operation</h2>
+      <p>Run from <code>infra/</code>. Every command below targets the production stack (both <code>-f</code> flags needed).</p>
+<pre><code># Stop the app (data preserved)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# Start it again
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Check status
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# View logs
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f [service-name]</code></pre>
+      <p><strong>After receiving updated code</strong>, rebuild and restart:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build</code></pre>
+      <div class="callout note"><p>New database migrations run automatically whenever <code>backend</code> restarts — but only on restart. The <code>--build</code> + <code>up -d</code> command above always restarts it, so prefer that over trying to skip steps.</p></div>
+      <p>Day-to-day settings (login lockout, session lifetimes, rate limits, upload size, page size) usually don't need Docker at all — an administrator can change these live from the app's own Settings page. Reserve redeploys for actual code updates.</p>
+      <div class="callout danger"><p><strong>Destructive, avoid unless you mean it:</strong> <code>down -v</code> permanently deletes the database and all uploaded files. Never run this on a server with real data without a current backup.</p></div>
+    </section>
+
+    <section id="s12">
+      <h2>12. Backups</h2>
+      <p>Data lives in two places that must be backed up together: the database and the uploaded-media folder.</p>
+      <h3>Running a backup</h3>
+<pre><code>./scripts/backup_db.ps1</code></pre>
+      <p>Creates two timestamped files in <code>infra/backups/</code>: <code>pgdata_&lt;timestamp&gt;.dump</code> (database) and <code>media_&lt;timestamp&gt;.tar.gz</code> (uploaded files). Keeps 14 days by default (<code>-RetentionDays 30</code> to change) and can target a different folder (<code>-BackupDir "D:\Backups"</code>).</p>
+      <h3>Restoring a backup</h3>
+<pre><code>./scripts/restore_db.ps1 -DumpFile "infra/backups/pgdata_2026-08-21T140005.dump" `
+  -MediaArchive "infra/backups/media_2026-08-21T140005.tar.gz" -Confirm</code></pre>
+      <p><code>-Confirm</code> is required on purpose — restoring replaces all current data. Afterward:</p>
+      <ol>
+        <li>Apply pending migrations:
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py migrate</code></pre></li>
+        <li>If <code>PII_FIELD_KEY</code> changed since that backup, run the re-encryption command with the <em>old</em> key first — see Troubleshooting.</li>
+      </ol>
+      <h3>Running backups on Linux</h3>
+      <p>These scripts are PowerShell, which also runs on Linux via <strong>PowerShell Core</strong> (<code>pwsh</code>) — no separate Bash version exists.</p>
+<pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y wget apt-transport-https software-properties-common
+wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt-get update &amp;&amp; sudo apt-get install -y powershell</code></pre>
+<pre><code>pwsh ./scripts/backup_db.ps1
+pwsh ./scripts/restore_db.ps1 -DumpFile "infra/backups/pgdata_....dump" -Confirm</code></pre>
+      <h3>Scheduling backups automatically</h3>
+      <p>Nothing schedules backups by default — set up a recurring job:</p>
+      <span class="os-tag os-windows">Windows — Task Scheduler</span>
+      <ol>
+        <li>Task Scheduler → Create Basic Task, name it, choose a daily trigger.</li>
+        <li>Action: Start a program → <code>pwsh.exe</code> (or <code>powershell.exe</code>) → Arguments: <code>-File "C:\path\to\infra\scripts\backup_db.ps1"</code>.</li>
+        <li>Finish, then right-click → Run once to confirm it works.</li>
+      </ol>
+      <span class="os-tag os-linux">Linux — cron</span>
+<pre><code>crontab -e</code></pre>
+<pre><code>0 2 * * * pwsh /path/to/infra/scripts/backup_db.ps1 >> /var/log/mc-backup.log 2>&amp;1</code></pre>
+      <h3>Copying backups off the server</h3>
+      <p>The scripts only write to a local folder — if that disk fails, backups fail with it. Periodically copy <code>infra/backups/</code> to a second drive, network share, or off-site storage; there's no built-in automation for this, treat it as a manual habit. Backup files carry the same patient data as the live database — handle with the same care.</p>
+    </section>
+
+    <section id="s13">
+      <h2>13. Troubleshooting</h2>
+      <p><strong>A port is already in use / the app won't start.</strong><br>
+      Windows: <code>Get-NetTCPConnection -LocalPort 443</code> · Linux: <code>sudo ss -tulpn | grep :443</code>. Stop whatever else is using it, or change the service's bound port (see <code>docker-management.md</code>).</p>
+      <p><strong>A container keeps restarting or shows "unhealthy."</strong></p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f &lt;service-name&gt;</code></pre>
+      <p>Read the last log lines. Common first-boot cause: frontend starting a moment before its certificate is ready — see the tip at the end of Step 5.</p>
+      <p><strong>Browser shows a certificate warning.</strong> Expected — see Step 7, not a sign of a problem.</p>
+      <p><strong>Forgot the admin password.</strong> Create a new admin with a different username (Step 6), or ask your developer about resetting a password via Django's admin tools.</p>
+      <p><strong>Accidentally changed <code>PII_FIELD_KEY</code> and can't read patient data.</strong> Don't panic or restart repeatedly — put the <em>old</em> key back in <code>.env</code> immediately, then have your developer run the rotation command properly if a change is truly needed:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py reencrypt_pii --old-key &lt;OLD_KEY&gt;</code></pre>
+      <p>This safely re-encrypts every record instead of leaving old data unreadable. Only do this with guidance if unsure — it touches every patient record.</p>
+      <p><strong>The server's IP changed and nothing loads.</strong> Update <code>DJANGO_ALLOWED_HOSTS</code>/<code>DJANGO_CORS_ALLOWED_ORIGINS</code> (Step 4), then:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate backend frontend</code></pre>
+    </section>
+
+    <section id="s14">
+      <h2>14. Security notes</h2>
+      <ul>
+        <li>Database and cache publish <strong>no ports at all</strong> — reachable only by the other containers, never directly from the network. Already configured correctly; don't add port mappings for them.</li>
+        <li>The self-signed certificate is appropriate <strong>only</strong> because this deployment is private-network-only. Don't reuse it for anything reachable from the public internet.</li>
+        <li>Keep <code>.env</code> readable only by administrators — it holds every password and encryption key the app depends on.</li>
+        <li>Never set <code>DJANGO_DEBUG=true</code> on a real deployment. The production compose file forces it to <code>false</code>, and the app refuses to start in production with a missing or default-looking secret key, database password, or <code>PII_FIELD_KEY</code>. Fix the actual value instead of working around the failure.</li>
+        <li>Every meaningful action (creating, editing, viewing sensitive records) is written to an audit log automatically — nothing extra to configure.</li>
+      </ul>
+    </section>
+
+    <section id="s15">
+      <h2>15. Appendix — full reference</h2>
+      <h3>Full <code>.env</code> variable list</h3>
+      <table>
+        <tr><th>Variable</th><th>Sensitive?</th><th>Purpose</th></tr>
+        <tr><td><code>DJANGO_SECRET_KEY</code></td><td>Yes</td><td>Backend cryptographic key.</td></tr>
+        <tr><td><code>DJANGO_DEBUG</code></td><td>—</td><td>Must stay <code>false</code>; prod overlay enforces this.</td></tr>
+        <tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td>—</td><td>Hostnames/IPs the backend accepts.</td></tr>
+        <tr><td><code>DJANGO_CORS_ALLOWED_ORIGINS</code></td><td>—</td><td>Origins allowed to call the API cross-origin.</td></tr>
+        <tr><td><code>TZ</code></td><td>—</td><td>Server timezone.</td></tr>
+        <tr><td><code>POSTGRES_DB</code></td><td>—</td><td>Database name.</td></tr>
+        <tr><td><code>POSTGRES_USER</code></td><td>—</td><td>Database username.</td></tr>
+        <tr><td><code>POSTGRES_PASSWORD</code></td><td>Yes</td><td>Database password.</td></tr>
+        <tr><td><code>POSTGRES_HOST</code></td><td>—</td><td>Always <code>db</code> inside Docker — leave as-is.</td></tr>
+        <tr><td><code>POSTGRES_PORT</code></td><td>—</td><td>Port Postgres listens on inside its container.</td></tr>
+        <tr><td><code>REDIS_PASSWORD</code></td><td>Yes</td><td>Cache password, required by the production overlay.</td></tr>
+        <tr><td><code>REDIS_URL</code></td><td>—</td><td>Built from <code>REDIS_PASSWORD</code> automatically — leave as-is.</td></tr>
+        <tr><td><code>JWT_ACCESS_LIFETIME_MINUTES</code></td><td>—</td><td>Login session access-token lifetime.</td></tr>
+        <tr><td><code>JWT_REFRESH_LIFETIME_DAYS</code></td><td>—</td><td>How long before re-authentication is required.</td></tr>
+        <tr><td><code>PII_FIELD_KEY</code></td><td>Yes</td><td>Encrypts patient data at rest. Never change once real data exists.</td></tr>
+        <tr><td><code>PROXY_TARGET</code></td><td>—</td><td>Only relevant running frontend outside Docker; irrelevant here.</td></tr>
+        <tr><td><code>EMAIL_HOST</code> / <code>EMAIL_PORT</code> / <code>EMAIL_HOST_USER</code> / <code>EMAIL_USE_TLS</code> / <code>DEFAULT_FROM_EMAIL</code></td><td>—</td><td>Comunicaciones staff email (SMTP). Optional — see <a href="#s16">section 16</a>.</td></tr>
+        <tr><td><code>EMAIL_HOST_PASSWORD</code></td><td>Yes</td><td>Mailbox password / app password for the above.</td></tr>
+      </table>
+      <h3>Command cheat-sheet (production stack, run from <code>infra/</code>)</h3>
+<pre><code># Start / rebuild
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+# Stop (keeps data)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# Status
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# Logs
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f [service]
+
+# Shell into backend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh
+
+# Database shell
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec db psql -U &lt;POSTGRES_USER&gt; -d &lt;POSTGRES_DB&gt;
+
+# Run a database migration manually
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py migrate
+
+# Create an admin user
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py create_admin --username &lt;name&gt; --email &lt;email&gt; --password "&lt;password&gt;"
+
+# Backup / restore (PowerShell / PowerShell Core)
+./scripts/backup_db.ps1
+./scripts/restore_db.ps1 -DumpFile "&lt;path&gt;" -MediaArchive "&lt;path&gt;" -Confirm</code></pre>
+      <h3>Where things live once deployed</h3>
+      <table>
+        <tr><th>What</th><th>Address</th></tr>
+        <tr><td>The app (website)</td><td><code>https://&lt;server-IP&gt;</code></td></tr>
+        <tr><td>API health check</td><td><code>https://&lt;server-IP&gt;/api/health/</code></td></tr>
+      </table>
+      <p>Django admin (<code>/admin/</code>) and API docs (<code>/api/docs/</code>) exist but are restricted to Admin/IT accounts — day-to-day use only needs the main website address above.</p>
+    </section>
+
+    <section id="s16">
+      <h2>16. Configuring Comunicaciones for production (staff email &amp; patient WhatsApp)</h2>
+      <p><strong>Comunicaciones</strong> is the module that sends staff notices by email and appointment reminders to patients over WhatsApp. It runs on a fifth background container, <strong><code>communications_worker</code></strong> (<code>mc_prod_communications_worker</code> in this stack) — already started automatically by the same <code>up -d --build</code> command from Step 5; there is no separate service to install. It polls every 60 seconds and has nothing to configure on its own — the two channels below are configured separately.</p>
+
+      <h3>Staff email</h3>
+      <p>Comunicaciones reuses the clinic's own mailbox — it never sets up a second email service. Add these to <code>.env</code> (they're optional; leave <code>EMAIL_HOST</code> blank and staff-email sending simply stays off until it's filled in):</p>
+      <table>
+        <tr><th>Variable</th><th>What it's for</th></tr>
+        <tr><td><code>EMAIL_HOST</code></td><td>Your mail provider's SMTP server, e.g. <code>smtp.gmail.com</code> or <code>smtp.office365.com</code>.</td></tr>
+        <tr><td><code>EMAIL_PORT</code></td><td>Usually <code>587</code> (STARTTLS).</td></tr>
+        <tr><td><code>EMAIL_HOST_USER</code></td><td>The mailbox's login/address.</td></tr>
+        <tr><td><code>EMAIL_HOST_PASSWORD</code></td><td>Its password — for Gmail/Google Workspace this must be an <strong>App Password</strong>, not the regular account password. <strong>Secret.</strong></td></tr>
+        <tr><td><code>EMAIL_USE_TLS</code></td><td>Leave <code>true</code>.</td></tr>
+        <tr><td><code>DEFAULT_FROM_EMAIL</code></td><td>The "From" address staff see, e.g. <code>no-reply@yourclinic.com</code>.</td></tr>
+      </table>
+      <p>After editing <code>.env</code>, restart the backend and worker so they pick up the new values:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate backend communications_worker</code></pre>
+      <p>Test it once logged in as an Admin: <strong>Comunicaciones → Ajustes → Correo → "Enviar correo de prueba."</strong></p>
+
+      <h3>Patient WhatsApp</h3>
+      <p>Unlike email, WhatsApp is <strong>not</strong> configured through <code>.env</code> at all — an Admin enters it directly in the app, under <strong>Comunicaciones → Ajustes → WhatsApp</strong>, after logging in. Nothing sends until this is done; the master switch stays off by default.</p>
+      <ol>
+        <li><strong>Provision WhatsApp Business Cloud API access with Meta first</strong> — that process (business verification, app creation) is Meta's own and outside this guide. You'll come out of it with four things: a <strong>phone number ID</strong>, a <strong>business account ID</strong>, a permanent <strong>access token</strong>, and an <strong>app secret</strong>.</li>
+        <li>Log in as Admin → <strong>Comunicaciones → Ajustes → WhatsApp</strong> → paste those four values, confirm the default country code (prefilled <code>+1</code> for the Dominican Republic), set the reminder lead time (default 24 hours before the appointment), then turn on <strong>"Activar WhatsApp a pacientes."</strong></li>
+        <li><strong>Templates.</strong> WhatsApp only ever sends Meta-<strong>pre-approved</strong> template messages — never free text. Before any patient WhatsApp will actually go out, create/activate one template row per kind under <strong>Comunicaciones → Plantillas</strong> (<code>cita_creada</code>, <code>cita_recordatorio</code>, <code>cita_reagendada</code>, <code>cita_cancelada</code>), matching the exact template name and language Meta approved for your account. A missing or inactive template for a kind fails just that one send with a clear in-app message ("Falta plantilla de WhatsApp para {tipo}") instead of breaking anything else.</li>
+        <li>Test it with <strong>"Enviar WhatsApp de prueba"</strong> on the same Ajustes page (stays disabled until the token and phone number ID are both saved).</li>
+      </ol>
+      <div class="callout warn">
+        <p><strong>The webhook needs the public internet — this guide's private-network setup does not provide that.</strong> Meta's servers deliver delivery-status updates (Sent → Delivered → Read) and inbound replies — including a patient texting <strong>STOP</strong>/<strong>SALIR</strong>/<strong>NO</strong>/<strong>CANCELAR</strong> to opt out — by calling a webhook URL on your server, which means Meta must be able to reach your server over the internet. This deployment, as described in this guide, is reachable only from your local network (see the note at the top of this document), so the webhook cannot be wired up as-is.</p>
+        <p><strong>What still works without it:</strong> sending itself only needs <em>outbound</em> connectivity (your server calling out to <code>graph.facebook.com</code>), so appointment reminders and notices still send normally.</p>
+        <p><strong>What doesn't:</strong> delivery status will sit at "Sent" and never advance to "Delivered"/"Read" in the Comunicaciones log, and a patient replying STOP will <strong>not</strong> be opted out automatically — a staff member has to turn off <strong>"Notificaciones por WhatsApp"</strong> on that patient's record by hand instead if the patient asks to stop receiving messages.</p>
+        <p>If your organization later decides to expose this deployment to the public internet (a real domain name, a real TLS certificate, a reviewed reverse-proxy/firewall setup — all outside this guide's scope; get a developer or ops professional involved for that), only then register the webhook: copy the read-only <strong>Webhook URL</strong> shown on the Ajustes → WhatsApp page, set a <strong>Verify Token</strong> on that same page, and enter both in the Meta App dashboard under WhatsApp → Configuration → Webhook, subscribed to the <code>messages</code> field.</p>
+      </div>
+
+      <h3>If messages seem stuck</h3>
+      <p>Queued email/WhatsApp messages send within about a minute (the worker's poll interval). If something sits in "Queued" longer than that, check the worker's own logs:</p>
+<pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f communications_worker</code></pre>
+    </section>
+
+    <footer>
+      See also, in this same folder: <code>docker-management.md</code> for deeper compose-file mechanics and <code>backups.md</code> for the full backup/restore design notes.
+    </footer>
+  </main>
+</div>
+</body>
+</html>
