@@ -175,4 +175,4 @@ Scheduler / cron if this stack starts holding real data).
 - **Frontend CI:** `npm ci` + `npm run build` (type-check + vite build) + vitest.
 - **Infra CI:** validates both dev (`docker-compose.yml` + override) and prod
   (`docker-compose.yml` + `docker-compose.prod.yml`) compose configs.
-- **CD:** build & tag Docker images; (later) push to registry / deploy to laptop.
+- **CD:** not yet implemented. Reference design (self-hosted runner on the target server, triggered by `repository_dispatch` from `backend`/`frontend` CI plus `infra`'s own `main` push) is written up in `infra/docs/cicd-deployment-pipeline.md` (English) / `infra/docs/manuales/manual-pipeline-cicd.md` (Spanish) — nothing there is built yet.

@@ -76,6 +76,8 @@ Nada en el sistema programa respaldos automáticos por sí solo — hay que conf
 9. Clic en **Siguiente**, revise el resumen, y clic en **Finalizar**.
 10. Busque la tarea recién creada en la lista, haga clic derecho sobre ella y elija **"Ejecutar"** una vez, para confirmar que funciona sin errores antes de confiar en que corra sola cada noche.
 
+> (TIP) Los 10 pasos anteriores también se pueden hacer con un solo comando: `infra/scripts/schedule_backup_task.ps1` (ejecutado como Administrador) registra la misma tarea diaria automáticamente — vea los comentarios del propio script para las opciones (`-At`, `-RetentionDays`, `-RunNow`).
+
 **Linux — cron:**
 ```bash
 crontab -e
