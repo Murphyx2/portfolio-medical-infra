@@ -168,6 +168,45 @@ DJANGO_CORS_ALLOWED_ORIGINS=https://192.168.1.42
 
 > (TIP) Pida a quien administre la red que **reserve** esa dirección IP para el servidor (una "reserva DHCP" o "IP estática"), para que no cambie después de un reinicio del router.
 
+### Reservar la IP del servidor (evitar que cambie)
+
+Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y **puede cambiarla** después de un reinicio del router o de un corte eléctrico. Si eso ocurre, `DJANGO_ALLOWED_HOSTS` y `DJANGO_CORS_ALLOWED_ORIGINS` quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 11). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.
+
+**Método 1 — Reserva DHCP en el módem/router (recomendado)**
+
+1. Primero anote la **dirección MAC** del servidor (el identificador único de su tarjeta de red):
+   - **Windows:**
+     ```powershell
+     ipconfig /all
+     ```
+     Busque `Dirección física` bajo el adaptador activo (Wi-Fi o Ethernet), con formato `XX-XX-XX-XX-XX-XX`.
+   - **Linux:**
+     ```bash
+     ip link
+     ```
+     Busque `link/ether` bajo la interfaz activa, con formato `xx:xx:xx:xx:xx:xx`.
+2. Entre al panel de administración del módem con la misma URL y credenciales del Capítulo 8 (`http://192.168.1.1` o `http://192.168.0.1`, usuario/contraseña en la etiqueta del equipo).
+3. Busque la sección de **DHCP** — el nombre exacto varía por proveedor y modelo: "Reserva de IP", "Address Reservation", "Static DHCP Lease", "DHCP Binding". Si no la encuentra con ninguno de estos nombres, contacte al soporte técnico de Claro o Altice para que lo guíen en su equipo específico.
+4. Ubique el servidor en la lista de dispositivos conectados por su dirección MAC (paso 1) y **reserve** la IP que ya tiene (la misma que anotó en la sección anterior). Guarde los cambios.
+
+> (TIP) Esta es la opción preferida: la reserva vive en el router, así que no hay que tocar la configuración de red del servidor, y sigue funcionando aunque el servidor se reinstale o se reemplace la tarjeta de red (si se actualiza la MAC en el router).
+
+**Método 2 — IP estática en el propio servidor**
+
+Use este método solo si no tiene acceso al panel del router (por ejemplo, un router administrado por TI de forma centralizada). En ese caso, o pida a quien sí tenga acceso que aplique el Método 1, o configure la IP como manual/estática directamente en el servidor:
+
+- **Windows:** Panel de Control → Redes → cambiar configuración del adaptador → clic derecho en el adaptador activo → Propiedades → `Protocolo de Internet versión 4 (TCP/IPv4)` → Propiedades → marque **"Usar la siguiente dirección IP"** y complete con la misma IP, máscara de subred y puerta de enlace que el adaptador ya tenía asignados por DHCP (visibles con `ipconfig /all` del paso 1).
+- **Linux (NetworkManager, común en Ubuntu de escritorio):**
+  ```bash
+  nmcli con mod "<nombre-de-la-conexión>" ipv4.addresses 192.168.1.42/24 ipv4.gateway 192.168.1.1 ipv4.dns 8.8.8.8 ipv4.method manual
+  nmcli con up "<nombre-de-la-conexión>"
+  ```
+- **Linux (servidor con Netplan, común en Ubuntu Server):** edite el archivo en `/etc/netplan/` correspondiente, cambie `dhcp4: true` por una sección `addresses:`/`gateway4:` con la IP fija, y aplique con `sudo netplan apply`.
+
+> (WARN) La IP que elija debe quedar **fuera** del rango que el router reparte por DHCP (revíselo en la misma sección de DHCP del panel del router), o puede chocar con la IP de otro dispositivo cuando el router se la asigne a alguien más.
+
+Después de aplicar cualquiera de los dos métodos, confirme que la IP no cambió (`ipconfig` en Windows / `hostname -I` en Linux) y que coincide con la que ya tiene escrita en `.env`.
+
 ## 7. Primer despliegue
 
 Desde la carpeta `infra/`:
@@ -230,7 +269,7 @@ La mayoría de los equipos que Claro Dominicana y Altice Dominicana entregan a s
 2. **Deshabilite UPnP** (Universal Plug and Play) — esta función permite que programas dentro de la red abran puertos hacia internet automáticamente, sin avisar. Para este sistema no se necesita, y es un riesgo de seguridad dejarlo activo.
 3. **Confirme que la DMZ esté deshabilitada** — la DMZ expone una computadora completa directamente a internet; nunca debe apuntar al servidor de este sistema.
 4. **No reenvíe (port-forward) ningún puerto** hacia el servidor — en particular los puertos **80, 443, 8000, 5432 y 6379**. Este sistema no necesita ningún puerto abierto desde internet hacia el servidor bajo ningún escenario cubierto por este manual.
-5. **Reserve una IP fija para el servidor** dentro de la red local (una reserva DHCP en el panel del módem), para que las reglas de firewall configuradas arriba no se rompan si la IP cambia.
+5. **Reserve una IP fija para el servidor** dentro de la red local, para que las reglas de firewall configuradas arriba no se rompan si la IP cambia — vea el procedimiento paso a paso en la sección **"Reservar la IP del servidor"** del Capítulo 6.
 
 > (NOTE) Los planes residenciales de Claro y Altice suelen usar **CGNAT** (una capa de traducción de direcciones compartida entre varios clientes), lo que de por sí ya dificulta que alguien desde internet alcance su red doméstica directamente. Esto es una protección adicional útil, **no un sustituto** de configurar bien el equipo — no dependa de ella únicamente.
 
