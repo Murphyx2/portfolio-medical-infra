@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de Usuario — Enfermero/a</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+:root{
+  --ink:#16231e; --ink-soft:#48584f; --paper:#f3f6f4; --panel:#ffffff; --border:#dde4e0;
+  --accent:#0e6b63; --accent-soft:#e2f2ef; --accent-ink:#0a4d47;
+  --warn-bg:#fff4e2; --warn-border:#c2760a; --warn-text:#6b3f04;
+  --danger-bg:#fdecec; --danger-border:#b3261e; --danger-text:#7a1913;
+  --tip-bg:#eaf1fb; --tip-border:#2f6fb4; --tip-text:#1c4b7a;
+  --note-bg:#eef1ee; --note-border:#7c8f85; --note-text:#3a4a42;
+  --code-bg:#132420; --code-text:#dcece6;
+  --os-win-bg:#e6effe; --os-win-text:#20438f; --os-lin-bg:#e6f5ea; --os-lin-text:#1c6b34;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+    --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+    --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+    --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+    --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+    --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+    --code-bg:#0a1512; --code-text:#cfe6de;
+    --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+  --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+  --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+  --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+  --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+  --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+  --code-bg:#0a1512; --code-text:#cfe6de;
+  --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  line-height:1.65; font-size:16.5px;
+}
+.layout{display:flex; max-width:1220px; margin:0 auto; align-items:flex-start;}
+nav.toc{
+  width:272px; flex-shrink:0; position:sticky; top:0; align-self:flex-start;
+  height:100vh; overflow-y:auto; padding:30px 16px 30px 24px; border-right:1px solid var(--border);
+}
+nav.toc .toc-kind{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.68rem; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 6px;
+}
+nav.toc h2{font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); margin:0 0 14px; font-weight:600;}
+nav.toc ol{list-style:none; margin:0; padding:0;}
+nav.toc li{margin:0 0 2px;}
+nav.toc a{
+  display:block; padding:7px 10px; border-radius:8px; color:var(--ink);
+  text-decoration:none; font-size:.87rem; border-left:2px solid transparent;
+}
+nav.toc a:hover{background:var(--accent-soft); color:var(--accent-ink); border-left-color:var(--accent);}
+main{flex:1; padding:44px 52px 90px; min-width:0;}
+.doc-kind-badge{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem;
+  font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink);
+  background:var(--accent-soft); border:1px solid var(--accent); border-radius:999px;
+  padding:4px 14px; margin-bottom:16px;
+}
+.doc-header h1{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:2rem;
+  margin:0 0 12px; letter-spacing:-.01em; text-wrap:balance; color:var(--ink);
+}
+.doc-header p.lede{color:var(--ink-soft); font-size:1.08rem; margin:0 0 28px; max-width:66ch;}
+.callout{border-radius:10px; padding:16px 20px; margin:20px 0; border:1.5px solid; font-size:.96rem;}
+.callout .callout-label{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:6px;
+}
+.callout.note{background:var(--note-bg); border-color:var(--note-border); color:var(--note-text);}
+.callout.warn{background:var(--warn-bg); border-color:var(--warn-border); color:var(--warn-text);}
+.callout.danger{background:var(--danger-bg); border-color:var(--danger-border); color:var(--danger-text);}
+.callout.tip{background:var(--tip-bg); border-color:var(--tip-border); color:var(--tip-text);}
+.callout p:first-child{margin-top:0;} .callout p:last-child{margin-bottom:0;}
+.callout ul,.callout ol{margin-bottom:0;}
+section{margin:46px 0; scroll-margin-top:18px;}
+section h2{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:1.32rem; margin:0 0 16px;
+  padding-bottom:10px; border-bottom:1px solid var(--border); scroll-margin-top:18px; color:var(--ink);
+}
+section h3{font-size:1.08rem; margin:26px 0 10px; font-weight:600; scroll-margin-top:18px;}
+p{margin:0 0 14px; max-width:74ch;}
+ul,ol{margin:0 0 14px; padding-left:1.5em; max-width:74ch;}
+li{margin:5px 0;}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--accent-soft); color:var(--accent-ink); padding:.15em .42em; border-radius:5px; font-size:.86em;
+}
+pre{
+  background:var(--code-bg); color:var(--code-text); padding:16px 20px; border-radius:10px;
+  overflow-x:auto; font-size:.86rem; line-height:1.6; margin:16px 0;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+}
+pre code{background:none; padding:0; color:inherit; font-size:1em;}
+.table-wrap{overflow-x:auto; margin:16px 0;}
+table{border-collapse:collapse; width:100%; font-size:.9rem; min-width:480px;}
+th,td{border:1px solid var(--border); padding:9px 13px; text-align:left; vertical-align:top;}
+th{background:var(--accent-soft); font-weight:600; color:var(--accent-ink); font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em;}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--panel) 60%, var(--paper));}
+a{color:var(--accent-ink);}
+.os-tag{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.7rem; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:6px; margin:14px 0 6px;
+}
+.os-windows{background:var(--os-win-bg); color:var(--os-win-text);}
+.os-linux{background:var(--os-lin-bg); color:var(--os-lin-text);}
+footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--border); padding-top:20px; margin-top:70px;}
+@media (max-width: 880px){
+  .layout{flex-direction:column;}
+  nav.toc{width:100%; height:auto; position:relative; border-right:none; border-bottom:1px solid var(--border);}
+  main{padding:28px 22px 60px;}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <div class="toc-kind">Manual de Usuario · Enfermero/a</div>
+  <h2>Contenido</h2>
+  <ol><li><a href="#1-qué-puede-hacer-un-enfermeroa">1. Qué puede hacer un Enfermero/a</a></li>
+<li><a href="#2-cómo-iniciar-sesión">2. Cómo iniciar sesión</a></li>
+<li><a href="#3-recorrido-de-la-interfaz">3. Recorrido de la interfaz</a></li>
+<li><a href="#4-tareas-comunes-paso-a-paso">4. Tareas comunes paso a paso</a></li>
+<li><a href="#5-qué-no-puede-hacer-a-quién-contactar">5. Qué NO puede hacer / a quién contactar</a></li>
+<li><a href="#6-buenas-prácticas-de-seguridad">6. Buenas prácticas de seguridad</a></li>
+<li><a href="#7-preguntas-frecuentes">7. Preguntas frecuentes</a></li></ol>
+</nav>
+<main>
+  <div class="doc-header">
+    <span class="doc-kind-badge">Manual de Usuario · Enfermero/a</span>
+    <h1>Manual de Usuario — Enfermero/a</h1>
+    <p class="lede">Guía de uso del sistema INCAF para el rol **Enfermero/a**: apoyo clínico, registro de notas en el expediente, admisiones y citas.</p>
+  </div>
+  <section id="1-qué-puede-hacer-un-enfermeroa">
+<h2>1. Qué puede hacer un Enfermero/a</h2>
+<p>El rol Enfermero/a tiene acceso clínico de apoyo:</p>
+<ul><li>Ver y gestionar Pacientes (crear, editar).</li><li>Ver y gestionar Admisiones.</li><li>Ver y editar Expedientes Médicos — registrar notas clínicas e imágenes.</li><li>Ver y gestionar Citas.</li><li>Ver Médicos, Salas, Servicios, Medicamentos y ARS (consulta).</li><li>Enviar recordatorios manuales de citas por WhatsApp desde Comunicaciones.</li></ul>
+<p>No tiene acceso a Usuarios, Centros Médicos, Configuración ni Reportes.</p>
+</section>
+<section id="2-cómo-iniciar-sesión">
+<h2>2. Cómo iniciar sesión</h2>
+<ol><li>Abra el navegador y vaya a la dirección del sistema indicada por su clínica.</li><li>Ingrese su <strong>usuario</strong> y <strong>contraseña</strong>.</li><li>Haga clic en <strong>"Iniciar sesión"</strong>.</li></ol>
+</section>
+<section id="3-recorrido-de-la-interfaz">
+<h2>3. Recorrido de la interfaz</h2>
+<p>El menú lateral del Enfermero/a muestra:</p>
+<ul><li><strong>Atención</strong>: Admisiones, Pacientes, Citas, Expedientes.</li><li><strong>Operación</strong>: Médicos, Salas, Servicios, Medicamentos.</li><li><strong>Red</strong>: ARS.</li><li>Al pie: Comunicaciones.</li></ul>
+</section>
+<section id="4-tareas-comunes-paso-a-paso">
+<h2>4. Tareas comunes paso a paso</h2>
+<h3>Registrar una nota clínica en el expediente</h3>
+<ol><li>Vaya a <strong>Expedientes</strong> y ubique al paciente, o ábralo desde su admisión activa.</li><li>Use <strong>"Nuevo registro"</strong>.</li><li>Complete los signos vitales y observaciones que le correspondan (peso, talla, presión arterial, frecuencia cardíaca/respiratoria, glucosa, según el protocolo de su centro).</li><li>Guarde — quedará asociado al expediente del paciente.</li></ol>
+<h3>Apoyar una admisión</h3>
+<ol><li>Vaya a <strong>Admisiones</strong> y ubique al paciente en la lista del día.</li><li>Confirme sala y servicio asignados.</li><li>Registre lo que corresponda antes de que el médico complete la atención.</li></ol>
+<h3>Registrar un paciente nuevo</h3>
+<ol><li>Vaya a <strong>Pacientes → Nuevo paciente</strong>.</li><li>Complete identidad, contacto y seguro (ARS) si aplica.</li><li>Si es menor de edad, complete los datos del tutor/responsable.</li><li>Guarde.</li></ol>
+<h3>Gestionar una cita</h3>
+<ol><li>Vaya a <strong>Citas</strong>.</li><li>Cree, confirme, complete o cancele citas según lo requiera la operación del día.</li></ol>
+<h3>Enviar un recordatorio manual por WhatsApp</h3>
+<ol><li>Vaya a <strong>Comunicaciones</strong>.</li><li>Ubique la cita o el paciente y use la opción de enviar recordatorio manual.</li></ol>
+</section>
+<section id="5-qué-no-puede-hacer-a-quién-contactar">
+<h2>5. Qué NO puede hacer / a quién contactar</h2>
+<ul><li>No puede crear ni editar cuentas de otros usuarios.</li><li>No puede ver ni gestionar Centros Médicos, Configuración del sistema, ni Reportes.</li><li>No puede eliminar Admisiones ni Expedientes — para correcciones sobre registros ya completados, contacte a un Administrador o Gerente de centro.</li><li>No puede redactar correos desde Comunicaciones (solo enviar recordatorios manuales de WhatsApp).</li></ul>
+<div class="callout note"><span class="callout-label">Nota</span><p>Si en algún momento su cuenta no muestra la opción de crear o editar un paciente, verifique con Administración — el alcance exacto de su rol puede ajustarse según la política de cada centro.</p></div>
+</section>
+<section id="6-buenas-prácticas-de-seguridad">
+<h2>6. Buenas prácticas de seguridad</h2>
+<ul><li>No comparta su usuario ni contraseña con otros compañeros de turno.</li><li>Cierre sesión al terminar su turno, especialmente en estaciones de enfermería compartidas.</li><li>Verifique siempre la identidad del paciente (nombre y cédula) antes de registrar signos vitales o notas clínicas.</li><li>Los datos personales y clínicos de los pacientes están protegidos por ley — no los comparta con personas ajenas a su atención.</li></ul>
+</section>
+<section id="7-preguntas-frecuentes">
+<h2>7. Preguntas frecuentes</h2>
+<p><strong>¿Puedo editar una nota clínica después de guardarla?</strong> Depende del estado del registro — algunos quedan protegidos contra edición una vez completados, para proteger la integridad del expediente. Consulte con un médico o Administración si necesita corregir algo.</p>
+<p><strong>¿Por qué no veo la sección de Reportes ni Configuración?</strong> Esas secciones están reservadas a Administrador, TI y Gerente de centro. Si necesita algo de esas secciones, solicítelo a Administración.</p>
+<p><strong>¿Qué hago si un paciente aparece duplicado?</strong> Contacte a un Administrador — ellos pueden fusionar o desactivar el registro duplicado.</p>
+</section>
+  <footer>INCAF &mdash; MedicalConsultations &middot; Documento interno de operaciones, en constante actualizaci&oacute;n.</footer>
+</main>
+</div>
+</body>
+</html>

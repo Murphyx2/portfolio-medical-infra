@@ -123,23 +123,56 @@ and `/media/<path>?token=…` (HMAC-signed token, 1h TTL).
 |-----------|-------------------|-----------------------------------------|
 | `db`      | postgres:16-alpine| named volume for data                   |
 | `cache`   | redis:7-alpine    | cache + future Celery broker            |
-| `backend` | Django + gunicorn | volumes for dev (runserver)             |
-| `frontend`| Vite dev / nginx  | dev proxy `/api` → backend; prod nginx static + proxy |
+| `backend` | Django + gunicorn | volumes for dev (runserver); whitenoise serves collected static assets in-process (no filesystem/volume needed for `STATIC_ROOT`) |
+| `frontend`| Vite dev / nginx  | dev proxy `/api` → backend; prod nginx static + proxy. `client_max_body_size 100m` (matches the top of the admin-configurable max-image-upload range, `apps.systemsettings`); `/static/` and `/admin/` proxy to `backend` like `/api/` (both previously fell through to the SPA catch-all) |
 
-Dev mode: `docker compose up`; prod mode: build frontend static, nginx serves it and
-reverse-proxies `/api`.
+Dev mode: `docker compose up` (auto-loads `docker-compose.override.yml`); prod mode:
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` — built frontend
+static, nginx serves it and reverse-proxies `/api`.
 
-Note: dev and prod compose files are hand-maintained parallel files (no `extends`/`include`)
-— a topology change must be made in both `docker-compose.yml` and `docker-compose.prod.yml`.
+Note: dev and prod share a single `docker-compose.yml` base (image, env, healthchecks,
+volumes); `docker-compose.override.yml` adds dev-only bind mounts/ports/runserver and
+`docker-compose.prod.yml` adds prod-only gunicorn/TLS/cert-init. A topology change goes
+in the base unless it is dev-only or prod-only.
+
+### 5.1 Backup & Restore
+
+Full usage guide: [`infra/docs/backups.md`](./backups.md). Summary:
+
+All PHI (patient rows, consultation logs, audit entries, clinical images) lives in two
+named Docker volumes — `medicalconsultations_pgdata` (Postgres) and
+`medicalconsultations_media_volume` (uploaded images) — on a single laptop-class host with
+no other redundancy. `infra/scripts/backup_db.ps1` / `restore_db.ps1` are the only backup
+interface; there is no automatic scheduling yet (run manually, or wire into Windows Task
+Scheduler / cron if this stack starts holding real data).
+
+- **Backup:** `infra/scripts/backup_db.ps1 [-RetentionDays 14] [-BackupDir infra/backups]`
+  — `pg_dump -Fc` (self-contained: embeds the full schema, not just data) plus a `tar.gz`
+  of the media volume, both timestamped into `infra/backups/` (gitignored — dump files are
+  decrypted-at-rest PHI and need the same access control as the production database
+  itself). Files older than `-RetentionDays` are pruned automatically.
+- **Restore:** `infra/scripts/restore_db.ps1 -DumpFile <path> [-MediaArchive <path>] -Confirm`
+  — destructive (`pg_restore --clean --if-exists`), refuses to run without `-Confirm`.
+- **Two caveats after any restore:**
+  1. **Schema drift.** A backup is never "invalidated" by later migrations — `pg_dump -Fc`
+     captures the schema as it stood at dump time. But *restoring* an old dump rolls the
+     schema back to that point: migrations run after the backup (including data-backfill
+     migrations, e.g. `patients` 0003-0005's helper-column backfills) are lost and must be
+     re-applied with `python manage.py migrate` before the app is trusted again.
+  2. **`PII_FIELD_KEY` era.** If the key was rotated (`manage.py reencrypt_pii`) between
+     backup and restore, the restored encrypted PII columns are undecryptable under the
+     *current* key (`decrypt_token` fails closed by design). Restore with the key that was
+     active at backup time, or re-run `reencrypt_pii` immediately after restoring.
+- Current hosted data is declared throwaway test data (see repo baseline notes) — this is
+  deliberately the moment to have this seam ready, before real PHI arrives.
 
 ## 6. CI/CD (GitHub Actions)
 
-- Workflows live in `infra/.github/workflows/` and cross-checkout the `backend` and
-  `frontend` repos. **They trigger on pushes to the infra repo's `main`** — a push to
-  the backend or frontend repo does not fire the gate that tests them (known limitation
-  of the three-repo layout; per-repo workflows are the intended fix).
-- **Backend CI:** runs `manage.py check` + pytest (job is named "Lint, check & test"
-  but performs no lint step).
-- **Frontend CI:** runs `npm ci` + `npm run build` (type-check + vite build). vitest is
-  not run in CI.
+- Per-repo workflows live next to the code: `backend/.github/workflows/ci.yml`,
+  `frontend/.github/workflows/ci.yml`, `infra/.github/workflows/ci.yml`. Each triggers on
+  pushes and PRs to `dev`/`main` — a push to any repo fires its own gate.
+- **Backend CI:** `manage.py check` + pytest.
+- **Frontend CI:** `npm ci` + `npm run build` (type-check + vite build) + vitest.
+- **Infra CI:** validates both dev (`docker-compose.yml` + override) and prod
+  (`docker-compose.yml` + `docker-compose.prod.yml`) compose configs.
 - **CD:** build & tag Docker images; (later) push to registry / deploy to laptop.

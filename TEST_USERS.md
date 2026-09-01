@@ -12,7 +12,7 @@ These are local development accounts only — do not use outside the dev environ
 | `receptionist` | `Pass123!x`  | RECEPTIONIST    | Manage patients, appointments and ARS insurers; cannot touch records/users |
 | `nurse`     | `Pass123!x`   | NURSE           | Manage medical records (read/write); cannot manage patients |
 | `it`        | `Pass123!x`   | IT              | Manage users, centers, medicines; patient PII is masked/redacted |
-| `cm`        | `Pass123!x`   | CENTER_MANAGER  | Read-only overview of centers and patients |
+| `cm`        | `Pass123!x`   | CENTER_MANAGER  | Admin-equivalent everywhere except Settings (view-only there, but can still change Language) |
 
 ## Access
 
@@ -35,5 +35,5 @@ Read-only PostgreSQL account for inspecting the database directly (psql / pgAdmi
 ## Notes
 
 - Extra ad-hoc users may exist in the DB from testing (`drdiaz`, `center`, etc.) — ignore them.
-- Patient PII is encrypted at rest; `it` and `cm` receive redacted data in API responses (receptionists, doctors, nurses and admins see full PII).
+- Patient PII is encrypted at rest; `it` receives redacted data in API responses (receptionists, doctors, nurses, admins, and center managers see full PII).
 - If a user cannot log in, recreate the stack's data or ask to have the password reset.
