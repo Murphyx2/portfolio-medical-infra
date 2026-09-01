@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de Respaldo y Restauración</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+:root{
+  --ink:#16231e; --ink-soft:#48584f; --paper:#f3f6f4; --panel:#ffffff; --border:#dde4e0;
+  --accent:#0e6b63; --accent-soft:#e2f2ef; --accent-ink:#0a4d47;
+  --warn-bg:#fff4e2; --warn-border:#c2760a; --warn-text:#6b3f04;
+  --danger-bg:#fdecec; --danger-border:#b3261e; --danger-text:#7a1913;
+  --tip-bg:#eaf1fb; --tip-border:#2f6fb4; --tip-text:#1c4b7a;
+  --note-bg:#eef1ee; --note-border:#7c8f85; --note-text:#3a4a42;
+  --code-bg:#132420; --code-text:#dcece6;
+  --os-win-bg:#e6effe; --os-win-text:#20438f; --os-lin-bg:#e6f5ea; --os-lin-text:#1c6b34;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+    --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+    --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+    --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+    --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+    --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+    --code-bg:#0a1512; --code-text:#cfe6de;
+    --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+  --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+  --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+  --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+  --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+  --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+  --code-bg:#0a1512; --code-text:#cfe6de;
+  --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  line-height:1.65; font-size:16.5px;
+}
+.layout{display:flex; max-width:1220px; margin:0 auto; align-items:flex-start;}
+nav.toc{
+  width:272px; flex-shrink:0; position:sticky; top:0; align-self:flex-start;
+  height:100vh; overflow-y:auto; padding:30px 16px 30px 24px; border-right:1px solid var(--border);
+}
+nav.toc .toc-kind{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.68rem; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 6px;
+}
+nav.toc h2{font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); margin:0 0 14px; font-weight:600;}
+nav.toc ol{list-style:none; margin:0; padding:0;}
+nav.toc li{margin:0 0 2px;}
+nav.toc a{
+  display:block; padding:7px 10px; border-radius:8px; color:var(--ink);
+  text-decoration:none; font-size:.87rem; border-left:2px solid transparent;
+}
+nav.toc a:hover{background:var(--accent-soft); color:var(--accent-ink); border-left-color:var(--accent);}
+main{flex:1; padding:44px 52px 90px; min-width:0;}
+.doc-kind-badge{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem;
+  font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink);
+  background:var(--accent-soft); border:1px solid var(--accent); border-radius:999px;
+  padding:4px 14px; margin-bottom:16px;
+}
+.doc-header h1{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:2rem;
+  margin:0 0 12px; letter-spacing:-.01em; text-wrap:balance; color:var(--ink);
+}
+.doc-header p.lede{color:var(--ink-soft); font-size:1.08rem; margin:0 0 28px; max-width:66ch;}
+.callout{border-radius:10px; padding:16px 20px; margin:20px 0; border:1.5px solid; font-size:.96rem;}
+.callout .callout-label{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:6px;
+}
+.callout.note{background:var(--note-bg); border-color:var(--note-border); color:var(--note-text);}
+.callout.warn{background:var(--warn-bg); border-color:var(--warn-border); color:var(--warn-text);}
+.callout.danger{background:var(--danger-bg); border-color:var(--danger-border); color:var(--danger-text);}
+.callout.tip{background:var(--tip-bg); border-color:var(--tip-border); color:var(--tip-text);}
+.callout p:first-child{margin-top:0;} .callout p:last-child{margin-bottom:0;}
+.callout ul,.callout ol{margin-bottom:0;}
+section{margin:46px 0; scroll-margin-top:18px;}
+section h2{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:1.32rem; margin:0 0 16px;
+  padding-bottom:10px; border-bottom:1px solid var(--border); scroll-margin-top:18px; color:var(--ink);
+}
+section h3{font-size:1.08rem; margin:26px 0 10px; font-weight:600; scroll-margin-top:18px;}
+p{margin:0 0 14px; max-width:74ch;}
+ul,ol{margin:0 0 14px; padding-left:1.5em; max-width:74ch;}
+li{margin:5px 0;}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--accent-soft); color:var(--accent-ink); padding:.15em .42em; border-radius:5px; font-size:.86em;
+}
+pre{
+  background:var(--code-bg); color:var(--code-text); padding:16px 20px; border-radius:10px;
+  overflow-x:auto; font-size:.86rem; line-height:1.6; margin:16px 0;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+}
+pre code{background:none; padding:0; color:inherit; font-size:1em;}
+.table-wrap{overflow-x:auto; margin:16px 0;}
+table{border-collapse:collapse; width:100%; font-size:.9rem; min-width:480px;}
+th,td{border:1px solid var(--border); padding:9px 13px; text-align:left; vertical-align:top;}
+th{background:var(--accent-soft); font-weight:600; color:var(--accent-ink); font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em;}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--panel) 60%, var(--paper));}
+a{color:var(--accent-ink);}
+.os-tag{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.7rem; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:6px; margin:14px 0 6px;
+}
+.os-windows{background:var(--os-win-bg); color:var(--os-win-text);}
+.os-linux{background:var(--os-lin-bg); color:var(--os-lin-text);}
+footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--border); padding-top:20px; margin-top:70px;}
+@media (max-width: 880px){
+  .layout{flex-direction:column;}
+  nav.toc{width:100%; height:auto; position:relative; border-right:none; border-bottom:1px solid var(--border);}
+  main{padding:28px 22px 60px;}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <div class="toc-kind">Manual de Respaldo</div>
+  <h2>Contenido</h2>
+  <ol><li><a href="#1-qué-se-respalda-y-qué-no">1. Qué se respalda y qué no</a></li>
+<li><a href="#2-ejecutar-un-respaldo-manualmente">2. Ejecutar un respaldo manualmente</a></li>
+<li><a href="#3-qué-no-hacer-durante-un-respaldo">3. Qué NO hacer durante un respaldo</a></li>
+<li><a href="#4-programar-respaldos-automáticos">4. Programar respaldos automáticos</a></li>
+<li><a href="#5-manejo-de-los-archivos-generados">5. Manejo de los archivos generados</a></li>
+<li><a href="#6-restaurar-desde-un-respaldo">6. Restaurar desde un respaldo</a></li>
+<li><a href="#7-verificación-posterior-a-la-restauración">7. Verificación posterior a la restauración</a></li>
+<li><a href="#8-preguntas-frecuentes">8. Preguntas frecuentes</a></li></ol>
+</nav>
+<main>
+  <div class="doc-header">
+    <span class="doc-kind-badge">Manual de Respaldo</span>
+    <h1>Manual de Respaldo y Restauración</h1>
+    <p class="lede">Guía paso a paso para respaldar y restaurar los datos de MedicalConsultations, y cómo manejar los archivos que genera el respaldo, en Windows y en Linux.</p>
+  </div>
+  <section id="1-qué-se-respalda-y-qué-no">
+<h2>1. Qué se respalda y qué no</h2>
+<p>Todos los datos del sistema — pacientes, expedientes, citas, encuentros, registro de auditoría, usuarios — viven en dos lugares dentro de Docker:</p>
+<ul><li>La <strong>base de datos</strong> (<code>medicalconsultations_pgdata</code>): toda la información excepto las imágenes clínicas.</li><li>El <strong>volumen de archivos</strong> (<code>medicalconsultations_media_volume</code>): las imágenes subidas a los expedientes.</li></ul>
+<p>Ninguno de los dos tiene respaldo automático propio dentro de Docker. Si el disco del servidor falla, si alguien ejecuta un comando destructivo, o si una actualización sale mal, <strong>el único camino de recuperación es un respaldo hecho de antemano.</strong></p>
+<div class="callout note"><span class="callout-label">Nota</span><p>El sistema nunca borra datos de verdad cuando un usuario "elimina" un registro desde la aplicación (es un borrado suave, reversible desde adentro) — pero eso no reemplaza un respaldo. Un respaldo protege contra la pérdida del servidor completo, no contra errores de un usuario dentro del sistema.</p></div>
+</section>
+<section id="2-ejecutar-un-respaldo-manualmente">
+<h2>2. Ejecutar un respaldo manualmente</h2>
+<span class="os-tag os-windows">Windows</span>
+<p>abra PowerShell dentro de la carpeta <code>infra/</code> y ejecute:</p>
+<pre><code>./scripts/backup_db.ps1</code></pre>
+<span class="os-tag os-linux">Linux</span>
+<p>los scripts están escritos en PowerShell, que también corre en Linux mediante <strong>PowerShell Core</strong> (<code>pwsh</code>). Si aún no lo tiene instalado:</p>
+<pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y wget apt-transport-https software-properties-common
+wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt-get update &amp;&amp; sudo apt-get install -y powershell</code></pre>
+<p>Luego ejecute el mismo script con <code>pwsh</code>:</p>
+<pre><code>cd infra
+pwsh ./scripts/backup_db.ps1</code></pre>
+<p><strong>Qué hace este comando:</strong></p>
+<ol><li>Genera una copia completa de la base de datos.</li><li>Genera una copia comprimida de todas las imágenes subidas.</li><li>Guarda ambos archivos, con fecha y hora en el nombre, dentro de <code>infra/backups/</code>.</li><li>Borra automáticamente los respaldos más antiguos que 14 días (ajustable, ver abajo).</li></ol>
+<p><strong>Cómo confirmar que funcionó:</strong> el script termina mostrando en pantalla el mensaje <code>Backup complete: </code> seguido de la ruta del archivo. Revise que la carpeta <code>infra/backups/</code> tenga dos archivos nuevos con la fecha de hoy en el nombre.</p>
+<p><strong>Opciones disponibles:</strong></p>
+<div class="table-wrap"><table>
+<tr><th>Opción</th><th>Por defecto</th><th>Para qué sirve</th></tr>
+<tr><td><code>-RetentionDays</code></td><td><code>14</code></td><td>Días que se conservan los respaldos antes de borrarse automáticamente. Ejemplo: <code>./scripts/backup_db.ps1 -RetentionDays 30</code></td></tr>
+<tr><td><code>-BackupDir</code></td><td><code>infra/backups</code></td><td>Carpeta donde se guardan los respaldos. Ejemplo: <code>./scripts/backup_db.ps1 -BackupDir "D:\Respaldos"</code></td></tr>
+</table></div>
+<div class="callout note"><span class="callout-label">Nota</span><p>El sistema (el servicio <code>db</code>) debe estar corriendo para que el respaldo funcione. Si el sistema completo está apagado, inicie al menos la base de datos con <code>docker compose up -d db</code> antes de respaldar.</p></div>
+</section>
+<section id="3-qué-no-hacer-durante-un-respaldo">
+<h2>3. Qué NO hacer durante un respaldo</h2>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No interrumpa el script mientras está corriendo (no cierre la ventana de PowerShell ni apague la computadora) — puede dejar un archivo de respaldo incompleto y corrupto sin avisar.</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No ejecute una restauración (Capítulo 6) al mismo tiempo que un respaldo está en curso.</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No borre archivos <code>.dump</code> o <code>.tar.gz</code> manualmente desde la carpeta <code>infra/backups/</code> sin antes confirmar que no son el único respaldo disponible — el script ya limpia los respaldos viejos automáticamente según <code>-RetentionDays</code>; no hace falta borrar a mano salvo que se esté liberando espacio de forma deliberada.</p></div>
+</section>
+<section id="4-programar-respaldos-automáticos">
+<h2>4. Programar respaldos automáticos</h2>
+<p>Nada en el sistema programa respaldos automáticos por sí solo — hay que configurarlo una vez, manualmente, en el propio sistema operativo.</p>
+<span class="os-tag os-windows">Windows — Programador de tareas (Task Scheduler), paso a paso</span>
+<ol><li>Abra el menú Inicio, escriba <strong>"Programador de tareas"</strong> y ábralo.</li><li>En el panel derecho, haga clic en <strong>"Crear tarea básica..."</strong>.</li><li>Asígnele un nombre, por ejemplo <code>Respaldo MedicalConsultations</code>, y clic en <strong>Siguiente</strong>.</li><li>Elija <strong>"Diariamente"</strong> como frecuencia (o la que prefiera) y clic en <strong>Siguiente</strong>.</li><li>Elija la hora de inicio — se recomienda una hora de poco uso, por ejemplo 2:00 a.m. — y clic en <strong>Siguiente</strong>.</li><li>En "Acción", elija <strong>"Iniciar un programa"</strong> y clic en <strong>Siguiente</strong>.</li><li>En <strong>"Programa o script"</strong>, escriba: <code>pwsh.exe</code> (o <code>powershell.exe</code> si <code>pwsh</code> no está instalado).</li><li>En <strong>"Agregar argumentos"</strong>, escriba: <code>-File "C:\ruta\completa\a\infra\scripts\backup_db.ps1"</code> (reemplace la ruta por la real en su servidor).</li><li>Clic en <strong>Siguiente</strong>, revise el resumen, y clic en <strong>Finalizar</strong>.</li><li>Busque la tarea recién creada en la lista, haga clic derecho sobre ella y elija <strong>"Ejecutar"</strong> una vez, para confirmar que funciona sin errores antes de confiar en que corra sola cada noche.</li></ol>
+<span class="os-tag os-linux">Linux — cron</span>
+<pre><code>crontab -e</code></pre>
+<p>Agregue esta línea para ejecutar el respaldo todas las noches a las 2:00 a.m.:</p>
+<pre><code>0 2 * * * pwsh /ruta/completa/a/infra/scripts/backup_db.ps1 &gt;&gt; /var/log/mc-backup.log 2&gt;&amp;1</code></pre>
+<p>Guarde y cierre el editor. El registro de cada ejecución quedará en <code>/var/log/mc-backup.log</code> — revíselo de vez en cuando para confirmar que sigue funcionando.</p>
+</section>
+<section id="5-manejo-de-los-archivos-generados">
+<h2>5. Manejo de los archivos generados</h2>
+<p>Cada respaldo produce dos archivos con fecha y hora en el nombre, por ejemplo:</p>
+<pre><code>pgdata_2026-08-21T140005.dump
+media_2026-08-21T140005.tar.gz</code></pre>
+<div class="callout danger"><span class="callout-label">Peligro</span><p>Estos archivos contienen los mismos datos personales de pacientes que la base de datos en vivo — trátelos con el mismo cuidado: solo personal autorizado debe tener acceso a la carpeta o unidad donde se guardan, nunca deben subirse a un repositorio de código, ni enviarse por correo o mensajería sin cifrar.</p></div>
+<p><strong>Retención:</strong> por defecto se conservan 14 días de respaldos; los más antiguos se borran automáticamente en cada ejecución (ajustable con <code>-RetentionDays</code>, ver Capítulo 2).</p>
+<p><strong>Copiar los respaldos fuera del servidor.</strong> Si el disco del servidor falla, los respaldos guardados ahí mismo se pierden con él. Es indispensable copiar <code>infra/backups/</code> a otro lugar periódicamente — un disco externo, una carpeta de red, o un almacenamiento en la nube. Esto no ocurre automáticamente; hágalo parte de una rutina.</p>
+<p><strong>Windows</strong> — copiar a una unidad de red o USB mapeada como una unidad (por ejemplo <code>E:\</code>):</p>
+<pre><code>robocopy "infra\backups" "E:\RespaldosMedicalConsultations" /MIR</code></pre>
+<p>(<code>/MIR</code> sincroniza el destino para que sea un espejo exacto del origen; puede omitirlo si prefiere solo copiar sin borrar nada en el destino.)</p>
+<p><strong>Linux</strong> — copiar a una carpeta de red o servidor remoto vía <code>rsync</code>:</p>
+<pre><code>rsync -av infra/backups/ usuario@servidor-remoto:/ruta/RespaldosMedicalConsultations/</code></pre>
+<p>o vía <code>scp</code> para una copia simple:</p>
+<pre><code>scp infra/backups/*.dump infra/backups/*.tar.gz usuario@servidor-remoto:/ruta/RespaldosMedicalConsultations/</code></pre>
+</section>
+<section id="6-restaurar-desde-un-respaldo">
+<h2>6. Restaurar desde un respaldo</h2>
+<div class="callout danger"><span class="callout-label">Peligro</span><p>Restaurar <strong>reemplaza por completo</strong> la base de datos y los archivos actuales con los del respaldo elegido. Todo lo guardado después de la fecha de ese respaldo se pierde. Antes de restaurar sobre un sistema que está en uso real, ejecute primero un respaldo nuevo (Capítulo 2) por si necesita volver atrás.</p></div>
+<span class="os-tag os-windows">Windows</span>
+<pre><code>./scripts/restore_db.ps1 -DumpFile "infra/backups/pgdata_2026-08-21T140005.dump" `
+  -MediaArchive "infra/backups/media_2026-08-21T140005.tar.gz" -Confirm</code></pre>
+<span class="os-tag os-linux">Linux</span>
+<pre><code>pwsh ./scripts/restore_db.ps1 -DumpFile "infra/backups/pgdata_2026-08-21T140005.dump" -MediaArchive "infra/backups/media_2026-08-21T140005.tar.gz" -Confirm</code></pre>
+<p>Reemplace los nombres de archivo por los del respaldo que quiere restaurar. El parámetro <code>-Confirm</code> es obligatorio a propósito — el script se niega a correr sin él, precisamente porque el efecto es destructivo. <code>-MediaArchive</code> es opcional: si se omite, solo se restaura la base de datos, sin las imágenes.</p>
+<p><strong>Después de restaurar, siempre haga estos dos pasos:</strong></p>
+<ol><li><strong>Vuelva a aplicar las actualizaciones de base de datos ("migraciones"):</strong></li></ol>
+<pre><code>   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py migrate</code></pre>
+<ol><li><strong>Revise la clave de cifrado (<code>PII_FIELD_KEY</code>).</strong> Si esa clave cambió entre el momento del respaldo y ahora, los datos de pacientes restaurados quedan ilegibles hasta corregirlo. Use la clave que estaba activa cuando se hizo ese respaldo, o ejecute:</li></ol>
+<pre><code>   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py reencrypt_pii --old-key &lt;CLAVE_DE_ESE_MOMENTO&gt;</code></pre>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Nunca restaure con la clave <code>PII_FIELD_KEY</code> equivocada esperando "arreglarlo después" — los datos de pacientes quedan permanentemente ilegibles bajo la clave incorrecta hasta ejecutar el paso de arriba con la clave correcta. Si no está seguro de cuál era la clave correcta en ese momento, deténgase y consulte a su desarrollador antes de continuar.</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No borre el archivo de respaldo que acaba de usar hasta confirmar (Capítulo 7) que la restauración funcionó correctamente.</p></div>
+</section>
+<section id="7-verificación-posterior-a-la-restauración">
+<h2>7. Verificación posterior a la restauración</h2>
+<p>Después de restaurar y aplicar los dos pasos del Capítulo 6, confirme que todo quedó bien:</p>
+<ol><li>Inicie sesión en el sistema con una cuenta conocida.</li><li>Abra el expediente de un paciente que sepa que existía en el respaldo restaurado y confirme que sus datos se ven correctamente.</li><li>Revise que la fecha/hora de los registros más recientes coincida con lo esperado del respaldo restaurado (no con datos posteriores, que ya no deberían estar ahí).</li><li>Confirme que la verificación de salud del sistema responde correctamente:</li></ol>
+<pre><code>   curl -k https://&lt;IP-del-servidor&gt;/api/health/</code></pre>
+<p>Solo después de confirmar estos cuatro puntos puede considerar la restauración exitosa y, si corresponde, archivar o limpiar respaldos antiguos con confianza.</p>
+</section>
+<section id="8-preguntas-frecuentes">
+<h2>8. Preguntas frecuentes</h2>
+<p><strong>¿Cada cuánto debo respaldar?</strong> Como mínimo, una vez al día mediante la tarea programada del Capítulo 4. Si el volumen de pacientes es alto, considere respaldar con más frecuencia (cada 6–12 horas).</p>
+<p><strong>¿Dónde debo guardar la copia fuera del servidor?</strong> Cualquier lugar físicamente distinto al servidor: un disco externo que se retire del sitio, una carpeta de red en otro equipo, o un servicio de almacenamiento en la nube con cifrado y acceso restringido. Lo importante es que un problema con el servidor (robo, incendio, falla de disco) no afecte también a la copia.</p>
+<p><strong>¿Qué hago si el script de respaldo falla?</strong> Lea el mensaje de error que muestra en pantalla — usualmente indica si el servicio <code>db</code> no está corriendo, o si no hay espacio en disco. Si no logra resolverlo, guarde el mensaje de error completo y contacte a su desarrollador o a TI antes de intentar una restauración con un respaldo que pueda estar incompleto.</p>
+<p><strong>¿Puedo restaurar solo la base de datos sin las imágenes?</strong> Sí — omita el parámetro <code>-MediaArchive</code> al ejecutar <code>restore_db.ps1</code>. El script mostrará una advertencia recordando que las imágenes no se restauraron.</p>
+<p><strong>¿Es seguro practicar una restauración antes de que haya una emergencia real?</strong> Sí, y se recomienda hacerlo periódicamente — es la única forma de confirmar que el respaldo realmente funciona antes de necesitarlo de verdad. Hágalo en un momento de bajo uso y avise al personal de antemano, ya que la restauración reemplaza los datos actuales durante la prueba.</p>
+</section>
+  <footer>INCAF &mdash; MedicalConsultations &middot; Documento interno de operaciones, en constante actualizaci&oacute;n.</footer>
+</main>
+</div>
+</body>
+</html>
