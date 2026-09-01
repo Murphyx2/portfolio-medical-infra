@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de Usuario — Gerente de Centro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+:root{
+  --ink:#16231e; --ink-soft:#48584f; --paper:#f3f6f4; --panel:#ffffff; --border:#dde4e0;
+  --accent:#0e6b63; --accent-soft:#e2f2ef; --accent-ink:#0a4d47;
+  --warn-bg:#fff4e2; --warn-border:#c2760a; --warn-text:#6b3f04;
+  --danger-bg:#fdecec; --danger-border:#b3261e; --danger-text:#7a1913;
+  --tip-bg:#eaf1fb; --tip-border:#2f6fb4; --tip-text:#1c4b7a;
+  --note-bg:#eef1ee; --note-border:#7c8f85; --note-text:#3a4a42;
+  --code-bg:#132420; --code-text:#dcece6;
+  --os-win-bg:#e6effe; --os-win-text:#20438f; --os-lin-bg:#e6f5ea; --os-lin-text:#1c6b34;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+    --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+    --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+    --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+    --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+    --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+    --code-bg:#0a1512; --code-text:#cfe6de;
+    --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+  --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+  --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+  --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+  --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+  --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+  --code-bg:#0a1512; --code-text:#cfe6de;
+  --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  line-height:1.65; font-size:16.5px;
+}
+.layout{display:flex; max-width:1220px; margin:0 auto; align-items:flex-start;}
+nav.toc{
+  width:272px; flex-shrink:0; position:sticky; top:0; align-self:flex-start;
+  height:100vh; overflow-y:auto; padding:30px 16px 30px 24px; border-right:1px solid var(--border);
+}
+nav.toc .toc-kind{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.68rem; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 6px;
+}
+nav.toc h2{font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); margin:0 0 14px; font-weight:600;}
+nav.toc ol{list-style:none; margin:0; padding:0;}
+nav.toc li{margin:0 0 2px;}
+nav.toc a{
+  display:block; padding:7px 10px; border-radius:8px; color:var(--ink);
+  text-decoration:none; font-size:.87rem; border-left:2px solid transparent;
+}
+nav.toc a:hover{background:var(--accent-soft); color:var(--accent-ink); border-left-color:var(--accent);}
+main{flex:1; padding:44px 52px 90px; min-width:0;}
+.doc-kind-badge{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem;
+  font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink);
+  background:var(--accent-soft); border:1px solid var(--accent); border-radius:999px;
+  padding:4px 14px; margin-bottom:16px;
+}
+.doc-header h1{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:2rem;
+  margin:0 0 12px; letter-spacing:-.01em; text-wrap:balance; color:var(--ink);
+}
+.doc-header p.lede{color:var(--ink-soft); font-size:1.08rem; margin:0 0 28px; max-width:66ch;}
+.callout{border-radius:10px; padding:16px 20px; margin:20px 0; border:1.5px solid; font-size:.96rem;}
+.callout .callout-label{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:6px;
+}
+.callout.note{background:var(--note-bg); border-color:var(--note-border); color:var(--note-text);}
+.callout.warn{background:var(--warn-bg); border-color:var(--warn-border); color:var(--warn-text);}
+.callout.danger{background:var(--danger-bg); border-color:var(--danger-border); color:var(--danger-text);}
+.callout.tip{background:var(--tip-bg); border-color:var(--tip-border); color:var(--tip-text);}
+.callout p:first-child{margin-top:0;} .callout p:last-child{margin-bottom:0;}
+.callout ul,.callout ol{margin-bottom:0;}
+section{margin:46px 0; scroll-margin-top:18px;}
+section h2{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:1.32rem; margin:0 0 16px;
+  padding-bottom:10px; border-bottom:1px solid var(--border); scroll-margin-top:18px; color:var(--ink);
+}
+section h3{font-size:1.08rem; margin:26px 0 10px; font-weight:600; scroll-margin-top:18px;}
+p{margin:0 0 14px; max-width:74ch;}
+ul,ol{margin:0 0 14px; padding-left:1.5em; max-width:74ch;}
+li{margin:5px 0;}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--accent-soft); color:var(--accent-ink); padding:.15em .42em; border-radius:5px; font-size:.86em;
+}
+pre{
+  background:var(--code-bg); color:var(--code-text); padding:16px 20px; border-radius:10px;
+  overflow-x:auto; font-size:.86rem; line-height:1.6; margin:16px 0;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+}
+pre code{background:none; padding:0; color:inherit; font-size:1em;}
+.table-wrap{overflow-x:auto; margin:16px 0;}
+table{border-collapse:collapse; width:100%; font-size:.9rem; min-width:480px;}
+th,td{border:1px solid var(--border); padding:9px 13px; text-align:left; vertical-align:top;}
+th{background:var(--accent-soft); font-weight:600; color:var(--accent-ink); font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em;}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--panel) 60%, var(--paper));}
+a{color:var(--accent-ink);}
+.os-tag{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.7rem; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:6px; margin:14px 0 6px;
+}
+.os-windows{background:var(--os-win-bg); color:var(--os-win-text);}
+.os-linux{background:var(--os-lin-bg); color:var(--os-lin-text);}
+footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--border); padding-top:20px; margin-top:70px;}
+@media (max-width: 880px){
+  .layout{flex-direction:column;}
+  nav.toc{width:100%; height:auto; position:relative; border-right:none; border-bottom:1px solid var(--border);}
+  main{padding:28px 22px 60px;}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <div class="toc-kind">Manual de Usuario · Gerente de Centro</div>
+  <h2>Contenido</h2>
+  <ol><li><a href="#1-qué-puede-hacer-un-gerente-de-centro">1. Qué puede hacer un Gerente de centro</a></li>
+<li><a href="#2-cómo-iniciar-sesión">2. Cómo iniciar sesión</a></li>
+<li><a href="#3-recorrido-de-la-interfaz">3. Recorrido de la interfaz</a></li>
+<li><a href="#4-tareas-comunes-paso-a-paso">4. Tareas comunes paso a paso</a></li>
+<li><a href="#5-qué-no-puede-hacer-a-quién-contactar">5. Qué NO puede hacer / a quién contactar</a></li>
+<li><a href="#6-buenas-prácticas-de-seguridad">6. Buenas prácticas de seguridad</a></li>
+<li><a href="#7-preguntas-frecuentes">7. Preguntas frecuentes</a></li></ol>
+</nav>
+<main>
+  <div class="doc-header">
+    <span class="doc-kind-badge">Manual de Usuario · Gerente de Centro</span>
+    <h1>Manual de Usuario — Gerente de Centro</h1>
+    <p class="lede">Guía de uso del sistema INCAF para el rol **Gerente de centro**: alcance equivalente a Administrador, limitado a su centro médico asignado.</p>
+  </div>
+  <section id="1-qué-puede-hacer-un-gerente-de-centro">
+<h2>1. Qué puede hacer un Gerente de centro</h2>
+<p>El Gerente de centro tiene un alcance casi idéntico al de Administrador, con dos diferencias importantes:</p>
+<ul><li>Está limitado a su <strong>centro médico asignado</strong> — por ejemplo, al generar Reportes, solo ve datos de su propio centro.</li><li><strong>No puede editar la Configuración general del sistema</strong> (solo verla) — salvo el ajuste de idioma, que sí puede cambiar.</li></ul>
+<p>Dentro de esos límites, puede:</p>
+<ul><li>Gestionar Pacientes, Admisiones, Expedientes, Citas — con los mismos permisos que un Administrador, incluyendo eliminar registros.</li><li>Gestionar Usuarios: crear, editar, desbloquear, restablecer contraseñas, e incluso asignar el rol de Administrador.</li><li>Gestionar Centros Médicos, ARS, Médicos, Salas, Servicios y Medicamentos.</li><li>Ver y generar Reportes de su centro (no puede crear ni editar las definiciones de reporte — eso es exclusivo de Administrador y TI).</li><li>Ver y usar Comunicaciones (correo y recordatorios), aunque no configurar sus ajustes (Ajustes/Plantillas son exclusivos de Administrador).</li></ul>
+</section>
+<section id="2-cómo-iniciar-sesión">
+<h2>2. Cómo iniciar sesión</h2>
+<ol><li>Abra el navegador y vaya a la dirección del sistema indicada por su clínica.</li><li>Ingrese su <strong>usuario</strong> y <strong>contraseña</strong>.</li><li>Haga clic en <strong>"Iniciar sesión"</strong>.</li></ol>
+</section>
+<section id="3-recorrido-de-la-interfaz">
+<h2>3. Recorrido de la interfaz</h2>
+<p>El menú lateral del Gerente de centro muestra prácticamente todo lo que ve un Administrador:</p>
+<ul><li><strong>Atención</strong>: Admisiones, Pacientes, Citas, Expedientes.</li><li><strong>Operación</strong>: Médicos, Salas, Servicios, Medicamentos.</li><li><strong>Red</strong>: Centros Médicos, ARS.</li><li>Al pie: Reportes, Comunicaciones, Usuarios, Configuración (solo lectura, salvo idioma).</li></ul>
+</section>
+<section id="4-tareas-comunes-paso-a-paso">
+<h2>4. Tareas comunes paso a paso</h2>
+<h3>Aprobar la vinculación de un médico a su centro</h3>
+<ol><li>Vaya a <strong>Médicos</strong>, seleccione el médico correspondiente.</li><li>En la sección de salas/servicios asignados a ese médico en su centro, confirme o ajuste la vinculación.</li><li>Guarde.</li></ol>
+<h3>Generar un reporte de su centro</h3>
+<ol><li>Vaya a <strong>Reportes</strong>.</li><li>Seleccione la definición de reporte (por ejemplo "Servicios prestados"), el mes, y confirme que el centro mostrado es el suyo (el sistema lo fuerza automáticamente a su centro asignado).</li><li>Use <strong>"Generar"</strong> para descargar el archivo.</li></ol>
+<h3>Gestionar usuarios de su centro</h3>
+<ol><li>Vaya a <strong>Usuarios → Nuevo</strong> (o edite uno existente).</li><li>Complete los datos y asigne el rol correspondiente (Doctor/a, Enfermero/a, Recepcionista, etc.).</li><li>Guarde.</li></ol>
+<h3>Cambiar el idioma del sistema</h3>
+<ol><li>Vaya a <strong>Configuración</strong>.</li><li>En la sección de idioma, seleccione el idioma preferido.</li><li>Guarde — este es el único campo de Configuración que puede modificar; el resto aparece visible pero no editable.</li></ol>
+<h3>Gestionar un paciente, admisión o cita (igual que Administrador)</h3>
+<p>Siga los mismos pasos que en el Manual de Usuario — Administrador (Capítulo 4) para Pacientes, Admisiones, Expedientes y Citas — el Gerente de centro tiene el mismo alcance en estas secciones.</p>
+</section>
+<section id="5-qué-no-puede-hacer-a-quién-contactar">
+<h2>5. Qué NO puede hacer / a quién contactar</h2>
+<ul><li>No puede editar la Configuración general del sistema (reglas de sesión, bloqueo, tamaño de archivos) — solo verla. Si necesita un cambio, contacte a un Administrador.</li><li>No puede crear ni editar las definiciones de Reportes ni Paquetes ARS — solo generarlos y descargarlos. Si necesita un reporte nuevo que no existe, solicítelo a Administración o TI.</li><li>No puede configurar los Ajustes de Comunicaciones (correo/WhatsApp) ni las Plantillas — solo Administrador puede hacerlo.</li><li>Los datos y reportes que ve están limitados a su centro asignado — si necesita información de otro centro, contacte a un Administrador.</li></ul>
+</section>
+<section id="6-buenas-prácticas-de-seguridad">
+<h2>6. Buenas prácticas de seguridad</h2>
+<ul><li>No comparta su usuario ni contraseña — su cuenta tiene privilegios amplios, incluyendo la capacidad de crear otras cuentas de Administrador.</li><li>Revise periódicamente la actividad de los usuarios de su centro desde <strong>Usuarios → Actividad</strong>.</li><li>Al desactivar a un empleado que deja su centro, hágalo el mismo día.</li><li>Cierre sesión al terminar de usar una computadora compartida.</li></ul>
+</section>
+<section id="7-preguntas-frecuentes">
+<h2>7. Preguntas frecuentes</h2>
+<p><strong>¿Por qué solo veo datos de mi propio centro en Reportes?</strong> Es el diseño intencional del sistema — el Gerente de centro administra su propio centro, no toda la red de centros. Si necesita ver otro centro, contacte a un Administrador.</p>
+<p><strong>¿Puedo asignar el rol de Administrador a alguien?</strong> Sí, el Gerente de centro puede asignar cualquier rol, incluyendo Administrador, al crear o editar un usuario.</p>
+<p><strong>¿Por qué la Configuración aparece pero no puedo cambiar casi nada ahí?</strong> Es intencional — puede verla para tener contexto, pero solo un Administrador puede modificar las reglas generales del sistema. El único campo editable para usted es el idioma.</p>
+<p><strong>¿Cuál es la diferencia real entre mi rol y Administrador?</strong> Solo dos: usted está limitado a su centro asignado en los reportes, y no puede editar la Configuración general del sistema ni las definiciones de Reportes. En todo lo demás, su alcance es equivalente.</p>
+</section>
+  <footer>INCAF &mdash; MedicalConsultations &middot; Documento interno de operaciones, en constante actualizaci&oacute;n.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de Usuario — Recepcionista</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+:root{
+  --ink:#16231e; --ink-soft:#48584f; --paper:#f3f6f4; --panel:#ffffff; --border:#dde4e0;
+  --accent:#0e6b63; --accent-soft:#e2f2ef; --accent-ink:#0a4d47;
+  --warn-bg:#fff4e2; --warn-border:#c2760a; --warn-text:#6b3f04;
+  --danger-bg:#fdecec; --danger-border:#b3261e; --danger-text:#7a1913;
+  --tip-bg:#eaf1fb; --tip-border:#2f6fb4; --tip-text:#1c4b7a;
+  --note-bg:#eef1ee; --note-border:#7c8f85; --note-text:#3a4a42;
+  --code-bg:#132420; --code-text:#dcece6;
+  --os-win-bg:#e6effe; --os-win-text:#20438f; --os-lin-bg:#e6f5ea; --os-lin-text:#1c6b34;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+    --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+    --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+    --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+    --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+    --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+    --code-bg:#0a1512; --code-text:#cfe6de;
+    --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e7efea; --ink-soft:#a9bab1; --paper:#0e1613; --panel:#141e1a; --border:#25332d;
+  --accent:#4fd6c4; --accent-soft:#123531; --accent-ink:#8be9dc;
+  --warn-bg:#2c210f; --warn-border:#c98a2e; --warn-text:#f0c483;
+  --danger-bg:#2c1414; --danger-border:#d1554b; --danger-text:#f3a49c;
+  --tip-bg:#111f2c; --tip-border:#4c86c4; --tip-text:#9dc4ec;
+  --note-bg:#1a221e; --note-border:#5c6f65; --note-text:#c2d0c8;
+  --code-bg:#0a1512; --code-text:#cfe6de;
+  --os-win-bg:#152036; --os-win-text:#9bb8f2; --os-lin-bg:#132819; --os-lin-text:#8fd6a4;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  line-height:1.65; font-size:16.5px;
+}
+.layout{display:flex; max-width:1220px; margin:0 auto; align-items:flex-start;}
+nav.toc{
+  width:272px; flex-shrink:0; position:sticky; top:0; align-self:flex-start;
+  height:100vh; overflow-y:auto; padding:30px 16px 30px 24px; border-right:1px solid var(--border);
+}
+nav.toc .toc-kind{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.68rem; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 6px;
+}
+nav.toc h2{font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); margin:0 0 14px; font-weight:600;}
+nav.toc ol{list-style:none; margin:0; padding:0;}
+nav.toc li{margin:0 0 2px;}
+nav.toc a{
+  display:block; padding:7px 10px; border-radius:8px; color:var(--ink);
+  text-decoration:none; font-size:.87rem; border-left:2px solid transparent;
+}
+nav.toc a:hover{background:var(--accent-soft); color:var(--accent-ink); border-left-color:var(--accent);}
+main{flex:1; padding:44px 52px 90px; min-width:0;}
+.doc-kind-badge{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem;
+  font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink);
+  background:var(--accent-soft); border:1px solid var(--accent); border-radius:999px;
+  padding:4px 14px; margin-bottom:16px;
+}
+.doc-header h1{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:2rem;
+  margin:0 0 12px; letter-spacing:-.01em; text-wrap:balance; color:var(--ink);
+}
+.doc-header p.lede{color:var(--ink-soft); font-size:1.08rem; margin:0 0 28px; max-width:66ch;}
+.callout{border-radius:10px; padding:16px 20px; margin:20px 0; border:1.5px solid; font-size:.96rem;}
+.callout .callout-label{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:700; font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:6px;
+}
+.callout.note{background:var(--note-bg); border-color:var(--note-border); color:var(--note-text);}
+.callout.warn{background:var(--warn-bg); border-color:var(--warn-border); color:var(--warn-text);}
+.callout.danger{background:var(--danger-bg); border-color:var(--danger-border); color:var(--danger-text);}
+.callout.tip{background:var(--tip-bg); border-color:var(--tip-border); color:var(--tip-text);}
+.callout p:first-child{margin-top:0;} .callout p:last-child{margin-bottom:0;}
+.callout ul,.callout ol{margin-bottom:0;}
+section{margin:46px 0; scroll-margin-top:18px;}
+section h2{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:1.32rem; margin:0 0 16px;
+  padding-bottom:10px; border-bottom:1px solid var(--border); scroll-margin-top:18px; color:var(--ink);
+}
+section h3{font-size:1.08rem; margin:26px 0 10px; font-weight:600; scroll-margin-top:18px;}
+p{margin:0 0 14px; max-width:74ch;}
+ul,ol{margin:0 0 14px; padding-left:1.5em; max-width:74ch;}
+li{margin:5px 0;}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--accent-soft); color:var(--accent-ink); padding:.15em .42em; border-radius:5px; font-size:.86em;
+}
+pre{
+  background:var(--code-bg); color:var(--code-text); padding:16px 20px; border-radius:10px;
+  overflow-x:auto; font-size:.86rem; line-height:1.6; margin:16px 0;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+}
+pre code{background:none; padding:0; color:inherit; font-size:1em;}
+.table-wrap{overflow-x:auto; margin:16px 0;}
+table{border-collapse:collapse; width:100%; font-size:.9rem; min-width:480px;}
+th,td{border:1px solid var(--border); padding:9px 13px; text-align:left; vertical-align:top;}
+th{background:var(--accent-soft); font-weight:600; color:var(--accent-ink); font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em;}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--panel) 60%, var(--paper));}
+a{color:var(--accent-ink);}
+.os-tag{
+  display:inline-block; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.7rem; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:6px; margin:14px 0 6px;
+}
+.os-windows{background:var(--os-win-bg); color:var(--os-win-text);}
+.os-linux{background:var(--os-lin-bg); color:var(--os-lin-text);}
+footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--border); padding-top:20px; margin-top:70px;}
+@media (max-width: 880px){
+  .layout{flex-direction:column;}
+  nav.toc{width:100%; height:auto; position:relative; border-right:none; border-bottom:1px solid var(--border);}
+  main{padding:28px 22px 60px;}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <div class="toc-kind">Manual de Usuario · Recepcionista</div>
+  <h2>Contenido</h2>
+  <ol><li><a href="#1-qué-puede-hacer-un-recepcionista">1. Qué puede hacer un Recepcionista</a></li>
+<li><a href="#2-cómo-iniciar-sesión">2. Cómo iniciar sesión</a></li>
+<li><a href="#3-recorrido-de-la-interfaz">3. Recorrido de la interfaz</a></li>
+<li><a href="#4-tareas-comunes-paso-a-paso">4. Tareas comunes paso a paso</a></li>
+<li><a href="#5-qué-no-puede-hacer-a-quién-contactar">5. Qué NO puede hacer / a quién contactar</a></li>
+<li><a href="#6-buenas-prácticas-de-seguridad">6. Buenas prácticas de seguridad</a></li>
+<li><a href="#7-preguntas-frecuentes">7. Preguntas frecuentes</a></li></ol>
+</nav>
+<main>
+  <div class="doc-header">
+    <span class="doc-kind-badge">Manual de Usuario · Recepcionista</span>
+    <h1>Manual de Usuario — Recepcionista</h1>
+    <p class="lede">Guía de uso del sistema INCAF para el rol **Recepcionista**: registro de pacientes, agenda de citas y admisiones en recepción.</p>
+  </div>
+  <section id="1-qué-puede-hacer-un-recepcionista">
+<h2>1. Qué puede hacer un Recepcionista</h2>
+<p>El Recepcionista gestiona el flujo de pacientes en el mostrador de recepción:</p>
+<ul><li>Registrar y editar Pacientes.</li><li>Crear, confirmar, completar y cancelar Citas.</li><li>Ver y gestionar Admisiones (registrar la llegada de un paciente).</li><li>Ver Médicos, Salas, Servicios, Medicamentos y ARS (consulta).</li><li>Enviar recordatorios manuales de citas por WhatsApp desde Comunicaciones.</li></ul>
+<p>No tiene acceso a Expedientes Médicos (información clínica), Centros Médicos, Usuarios, Configuración ni Reportes.</p>
+</section>
+<section id="2-cómo-iniciar-sesión">
+<h2>2. Cómo iniciar sesión</h2>
+<ol><li>Abra el navegador y vaya a la dirección del sistema indicada por su clínica.</li><li>Ingrese su <strong>usuario</strong> y <strong>contraseña</strong>.</li><li>Haga clic en <strong>"Iniciar sesión"</strong>.</li></ol>
+</section>
+<section id="3-recorrido-de-la-interfaz">
+<h2>3. Recorrido de la interfaz</h2>
+<p>El menú lateral del Recepcionista muestra:</p>
+<ul><li><strong>Atención</strong>: Admisiones, Pacientes, Citas.</li><li><strong>Operación</strong>: Médicos, Salas, Servicios, Medicamentos.</li><li><strong>Red</strong>: ARS.</li><li>Al pie: Comunicaciones.</li></ul>
+<div class="callout note"><span class="callout-label">Nota</span><p>La sección <strong>Expedientes</strong> no aparece en su menú — es información clínica reservada a Doctor/a, Enfermero/a, Administrador y Gerente de centro.</p></div>
+</section>
+<section id="4-tareas-comunes-paso-a-paso">
+<h2>4. Tareas comunes paso a paso</h2>
+<h3>Registrar un paciente nuevo</h3>
+<ol><li>Vaya a <strong>Pacientes → Nuevo paciente</strong>.</li><li>Complete identidad (nombre, cédula, fecha de nacimiento, género) y contacto (teléfono, dirección, correo).</li><li>Si el paciente tiene seguro, complete ARS y programa en la sección de seguro.</li><li>Si es menor de edad, complete los datos del tutor/responsable.</li><li>Guarde.</li></ol>
+<h3>Agendar una cita</h3>
+<ol><li>Vaya a <strong>Citas → Nueva cita</strong>.</li><li>Busque al paciente (o cree uno nuevo si no existe todavía).</li><li>Seleccione médico, servicio, centro, fecha y hora.</li><li>Guarde — la cita queda en estado "Programada".</li></ol>
+<h3>Confirmar, completar o cancelar una cita</h3>
+<ol><li>Vaya a <strong>Citas</strong> y ubique la cita del día.</li><li>Use <strong>"Confirmar"</strong> cuando el paciente confirme que asistirá.</li><li>Use <strong>"Completar"</strong> cuando el paciente ya fue atendido.</li><li>Use <strong>"Cancelar"</strong> si el paciente no puede asistir — el sistema pedirá un motivo breve.</li></ol>
+<h3>Registrar la llegada de un paciente (Admisión)</h3>
+<ol><li>Vaya a <strong>Admisiones → Nuevo</strong>.</li><li>Seleccione el paciente, el servicio y, si se conoce, la sala.</li><li>Guarde — el médico o enfermero podrá continuar la atención desde ahí.</li></ol>
+<h3>Enviar un recordatorio manual por WhatsApp</h3>
+<ol><li>Vaya a <strong>Comunicaciones</strong>.</li><li>Ubique la cita o el paciente correspondiente y use la opción de enviar recordatorio manual.</li><li>Esto es útil cuando el recordatorio automático no llegó o el paciente pidió que se le reenvíe.</li></ol>
+</section>
+<section id="5-qué-no-puede-hacer-a-quién-contactar">
+<h2>5. Qué NO puede hacer / a quién contactar</h2>
+<ul><li>No puede ver ni editar Expedientes Médicos — si un médico necesita revisar el historial clínico de un paciente, ellos lo hacen directamente desde su propia sesión.</li><li>No puede eliminar pacientes ni citas ya completadas — solo cancelarlas antes de completarse. Para correcciones sobre registros ya completados, contacte a un Administrador o Gerente de centro.</li><li>No puede crear ni editar cuentas de usuario, ni ver Centros Médicos, Configuración o Reportes.</li><li>No puede redactar correos desde Comunicaciones (solo enviar recordatorios manuales de WhatsApp) ni cambiar los ajustes de correo/WhatsApp.</li></ul>
+</section>
+<section id="6-buenas-prácticas-de-seguridad">
+<h2>6. Buenas prácticas de seguridad</h2>
+<ul><li>No comparta su usuario ni contraseña con otros compañeros de recepción — cada persona debe iniciar sesión con su propia cuenta.</li><li>Cierre sesión al alejarse del mostrador, especialmente si otras personas tienen acceso físico a la computadora.</li><li>Confirme siempre la cédula del paciente antes de crear un registro nuevo, para evitar duplicados.</li><li>No comparta datos personales de pacientes (teléfono, dirección, seguro) con nadie que no esté autorizado a recibirlos.</li></ul>
+</section>
+<section id="7-preguntas-frecuentes">
+<h2>7. Preguntas frecuentes</h2>
+<p><strong>¿Por qué no puedo ver el expediente clínico de un paciente?</strong> Es información médica protegida, reservada a personal clínico (Doctor/a, Enfermero/a) y a Administración. Recepción trabaja con los datos de contacto y citas, no con el historial médico.</p>
+<p><strong>Cree un paciente duplicado por error, ¿qué hago?</strong> Contacte a un Administrador — ellos pueden fusionar o desactivar el registro duplicado.</p>
+<p><strong>El paciente dice que no le llegó el recordatorio de WhatsApp, ¿qué hago?</strong> Use la opción de enviar recordatorio manual desde Comunicaciones (Capítulo 4). Si el problema persiste con varios pacientes, avise a TI o Administración — puede ser un problema del servicio de WhatsApp.</p>
+<p><strong>¿Puedo cambiar la hora de una cita ya confirmada?</strong> Sí, mientras no esté completada o cancelada — edite la cita y guarde el nuevo horario.</p>
+</section>
+  <footer>INCAF &mdash; MedicalConsultations &middot; Documento interno de operaciones, en constante actualizaci&oacute;n.</footer>
+</main>
+</div>
+</body>
+</html>
