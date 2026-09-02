@@ -134,9 +134,10 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 <li><a href="#3-qué-no-hacer-durante-un-respaldo">3. Qué NO hacer durante un respaldo</a></li>
 <li><a href="#4-programar-respaldos-automáticos">4. Programar respaldos automáticos</a></li>
 <li><a href="#5-manejo-de-los-archivos-generados">5. Manejo de los archivos generados</a></li>
-<li><a href="#6-restaurar-desde-un-respaldo">6. Restaurar desde un respaldo</a></li>
-<li><a href="#7-verificación-posterior-a-la-restauración">7. Verificación posterior a la restauración</a></li>
-<li><a href="#8-preguntas-frecuentes">8. Preguntas frecuentes</a></li></ol>
+<li><a href="#6-enviar-los-respaldos-a-almacenamiento-en-la-nube-y-rotación-de-credenciales">6. Enviar los respaldos a la nube y rotación de credenciales</a></li>
+<li><a href="#7-restaurar-desde-un-respaldo">7. Restaurar desde un respaldo</a></li>
+<li><a href="#8-verificación-posterior-a-la-restauración">8. Verificación posterior a la restauración</a></li>
+<li><a href="#9-preguntas-frecuentes">9. Preguntas frecuentes</a></li></ol>
 </nav>
 <main>
   <div class="doc-header">
@@ -179,7 +180,7 @@ pwsh ./scripts/backup_db.ps1</code></pre>
 <section id="3-qué-no-hacer-durante-un-respaldo">
 <h2>3. Qué NO hacer durante un respaldo</h2>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No interrumpa el script mientras está corriendo (no cierre la ventana de PowerShell ni apague la computadora) — puede dejar un archivo de respaldo incompleto y corrupto sin avisar.</p></div>
-<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No ejecute una restauración (Capítulo 6) al mismo tiempo que un respaldo está en curso.</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No ejecute una restauración (Capítulo 7) al mismo tiempo que un respaldo está en curso.</p></div>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No borre archivos <code>.dump</code> o <code>.tar.gz</code> manualmente desde la carpeta <code>infra/backups/</code> sin antes confirmar que no son el único respaldo disponible — el script ya limpia los respaldos viejos automáticamente según <code>-RetentionDays</code>; no hace falta borrar a mano salvo que se esté liberando espacio de forma deliberada.</p></div>
 </section>
 <section id="4-programar-respaldos-automáticos">
@@ -209,8 +210,72 @@ media_2026-08-21T140005.tar.gz</code></pre>
 <p>o vía <code>scp</code> para una copia simple:</p>
 <pre><code>scp infra/backups/*.dump infra/backups/*.tar.gz usuario@servidor-remoto:/ruta/RespaldosMedicalConsultations/</code></pre>
 </section>
-<section id="6-restaurar-desde-un-respaldo">
-<h2>6. Restaurar desde un respaldo</h2>
+<section id="6-enviar-los-respaldos-a-almacenamiento-en-la-nube-y-rotación-de-credenciales">
+<h2>6. Enviar los respaldos a almacenamiento en la nube y rotación de credenciales</h2>
+<p>Copiar a un disco externo o carpeta de red (Capítulo 5) ya saca los respaldos del servidor, pero siguen dependiendo del mismo edificio — un incendio, un robo, o una inundación puede afectar ambos a la vez. Un almacenamiento en la nube (fuera del sitio) es la protección real contra ese escenario. Esta sección cubre tres formas de hacerlo, de más simple a más flexible, y cómo manejar las credenciales de forma segura una vez configurado.</p>
+<div class="callout note"><span class="callout-label">Nota</span><p>Que el proveedor de la nube cifre los datos "en reposo" (a lo interno, en sus propios discos) es una protección distinta de mantener las credenciales de acceso seguras. Un cifrado en reposo no sirve de nada si la cuenta o la clave de acceso se filtra — cualquiera con esa credencial puede simplemente descargar los respaldos ya descifrados por el proveedor. Por eso esta sección también cubre cómo rotar esas credenciales, no solo cómo subir los archivos.</p></div>
+<h3>Opción A — Carpeta sincronizada (la más simple, sin necesidad de scripts)</h3>
+<p>Si ya tiene o puede instalar una aplicación de sincronización de escritorio (OneDrive, Google Drive, Dropbox), configure <code>infra/backups/</code> — o mejor, la carpeta de destino usada en el Capítulo 5 (<code>E:\RespaldosMedicalConsultations</code>, por ejemplo) — como una carpeta sincronizada. Todo lo que llegue ahí se sube automáticamente, sin escribir ningún comando.</p>
+<ul>
+<li>Ventaja: no requiere conocimientos técnicos adicionales; la aplicación queda corriendo en segundo plano.</li>
+<li>Desventaja: menos control sobre permisos y rotación de credenciales — depende de la seguridad de la cuenta personal/organizacional usada para la sincronización.</li>
+</ul>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Si usa esta opción, la cuenta de sincronización debe ser una cuenta <strong>organizacional dedicada</strong> (de la clínica, con acceso restringido a IT/administración), nunca la cuenta personal de un empleado — si esa persona deja la clínica, sus respaldos no deben quedar ligados a una cuenta que ya no controla.</p></div>
+<h3>Opción B — <code>rclone</code> (recomendado: funciona con casi cualquier proveedor)</h3>
+<p><a href="https://rclone.org/">rclone</a> es una herramienta gratuita y de código abierto que sube archivos a más de 40 proveedores de almacenamiento (Backblaze B2, Amazon S3, Google Drive, Azure Blob Storage, Dropbox, OneDrive, y otros) con el mismo conjunto de comandos, y guarda las credenciales en un archivo de configuración que puede protegerse con su propia contraseña.</p>
+<ol>
+<li>Instale <code>rclone</code> (Windows: descargue el ejecutable desde rclone.org y agréguelo al PATH; Linux: <code>curl https://rclone.org/install.sh | sudo bash</code>).</li>
+<li>Configure un "remoto" (la conexión al proveedor elegido):
+<pre><code>rclone config</code></pre>
+Siga el asistente interactivo — elija el proveedor, y pegue la clave de acceso (access key / API token) que genera ese proveedor para una cuenta o "bucket" dedicado a estos respaldos.</li>
+<li>(Recomendado) Proteja el archivo de configuración de <code>rclone</code> con una contraseña propia, para que las credenciales guardadas no queden legibles si alguien copia ese archivo:
+<pre><code>rclone config set --obscure</code></pre>
+o, más simple, actívelo desde el mismo asistente de <code>rclone config</code> con la opción <strong>"Set configuration password"</strong>.</li>
+<li>Suba los respaldos (ejecútelo después de <code>backup_db.ps1</code>, o agréguelo a la misma tarea programada del Capítulo 4):
+<pre><code>rclone sync infra/backups &lt;nombre-del-remoto&gt;:medicalconsultations-backups --create-empty-src-dirs</code></pre>
+</li>
+<li>Verifique que los archivos llegaron:
+<pre><code>rclone lsl &lt;nombre-del-remoto&gt;:medicalconsultations-backups</code></pre>
+</li>
+</ol>
+<div class="callout tip"><span class="callout-label">Recomendación</span><p>Para empezar sin costo, <strong>Backblaze B2</strong> ofrece 10 GB gratis y es uno de los proveedores más simples de configurar con <code>rclone</code> — suficiente para varios meses de respaldos de una clínica pequeña antes de necesitar un plan pago.</p></div>
+<h3>Opción C — Herramienta propia del proveedor (si la clínica ya usa uno específico)</h3>
+<p>Si la clínica ya tiene una cuenta empresarial con un proveedor específico, sus herramientas nativas también sirven y a veces se integran mejor con las políticas de esa cuenta (por ejemplo, retención automática, alertas):</p>
+<ul>
+<li><strong>Amazon S3:</strong> <code>aws s3 sync infra/backups s3://&lt;nombre-del-bucket&gt;/medicalconsultations-backups</code></li>
+<li><strong>Azure Blob Storage:</strong> <code>azcopy sync "infra/backups" "https://&lt;cuenta&gt;.blob.core.windows.net/&lt;contenedor&gt;" --recursive</code></li>
+<li><strong>Google Cloud Storage:</strong> <code>gsutil -m rsync -r infra/backups gs://&lt;nombre-del-bucket&gt;/medicalconsultations-backups</code></li>
+</ul>
+<p>Cada una requiere instalar su propia herramienta de línea de comandos (<code>aws configure</code>, <code>az login</code>, <code>gcloud auth login</code>) y guarda sus credenciales de forma similar a <code>rclone</code> — la rotación de credenciales de esta sección aplica igual, solo cambia el comando para generar una clave nueva en el proveedor.</p>
+<h3>Qué NO hacer al subir respaldos a la nube</h3>
+<div class="callout danger"><span class="callout-label">Peligro</span><p>Nunca escriba la clave de acceso (access key, API token, contraseña) directamente dentro de un script <code>.ps1</code> o <code>.sh</code> que luego pueda quedar en una carpeta compartida, un repositorio, o un correo. <code>rclone</code>, <code>aws configure</code>, <code>az login</code> y <code>gcloud auth login</code> ya guardan las credenciales en su propio archivo de configuración local — use eso, no un valor pegado a mano en el script.</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No use una cuenta de nube personal de un empleado para esto — use siempre una cuenta o "bucket" dedicado, propiedad de la clínica, con acceso limitado a quien de verdad lo necesite (idealmente solo permisos de <strong>subida</strong>, sin permiso de borrado, para que ni siquiera una credencial comprometida pueda destruir los respaldos ya guardados).</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No confíe en que "el proveedor ya cifra los datos" como única protección — eso protege contra el robo físico de los discos del proveedor, no contra una credencial de acceso filtrada o un empleado que se va sin que se le revoque el acceso.</p></div>
+<div class="callout danger"><span class="callout-label">Peligro</span><p>No comparta la misma credencial entre varias personas o varios sistemas. Si necesita que más de una persona pueda subir o revisar respaldos, cree una credencial separada por persona/uso — así, revocar el acceso de una persona no interrumpe a las demás.</p></div>
+<h3>Rotación de credenciales</h3>
+<p>Rotar significa: generar una credencial nueva, actualizar la configuración para usarla, confirmar que funciona, y <strong>revocar la anterior</strong> en el proveedor (no solo dejar de usarla — un token viejo sin revocar sigue siendo válido indefinidamente).</p>
+<p><strong>Cuándo rotar:</strong></p>
+<ul>
+<li>Cada <strong>90–180 días</strong> como rutina, sin que tenga que pasar nada — trátelo igual que cambiar una contraseña importante.</li>
+<li><strong>Inmediatamente</strong> si alguien con acceso a esa credencial deja la clínica, cambia de rol, o si sospecha que la credencial pudo haberse expuesto (por ejemplo, un script con la clave se compartió por error).</li>
+</ul>
+<p><strong>Cómo rotar (con <code>rclone</code>, el método recomendado de la Opción B):</strong></p>
+<ol>
+<li>En el panel del proveedor (Backblaze, AWS, etc.), genere una <strong>clave de acceso nueva</strong> — no edite la existente, cree una adicional.</li>
+<li>Actualice el remoto en <code>rclone</code> con la clave nueva:
+<pre><code>rclone config update &lt;nombre-del-remoto&gt; access_key_id &lt;NUEVA_CLAVE&gt; secret_access_key &lt;NUEVO_SECRETO&gt;</code></pre>
+</li>
+<li>Verifique que la clave nueva funciona antes de continuar:
+<pre><code>rclone lsd &lt;nombre-del-remoto&gt;:</code></pre>
+</li>
+<li>Solo después de confirmar que funciona, <strong>revoque/elimine la clave anterior</strong> en el panel del proveedor.</li>
+<li>Anote la fecha de esta rotación en algún lugar (una hoja de cálculo, un calendario recordatorio) para saber cuándo toca la próxima.</li>
+</ol>
+<p>Para las opciones C (AWS/Azure/Google), el mismo principio aplica: genere la credencial nueva primero, confírmela, y solo después revoque la anterior — nunca al revés, para no quedarse sin poder subir respaldos mientras resuelve el problema.</p>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No rote la credencial y revoque la anterior en el mismo paso sin haber confirmado primero que la nueva funciona — si la nueva credencial tiene un error de configuración, se queda sin forma de subir respaldos hasta corregirlo.</p></div>
+</section>
+<section id="7-restaurar-desde-un-respaldo">
+<h2>7. Restaurar desde un respaldo</h2>
 <div class="callout danger"><span class="callout-label">Peligro</span><p>Restaurar <strong>reemplaza por completo</strong> la base de datos y los archivos actuales con los del respaldo elegido. Todo lo guardado después de la fecha de ese respaldo se pierde. Antes de restaurar sobre un sistema que está en uso real, ejecute primero un respaldo nuevo (Capítulo 2) por si necesita volver atrás.</p></div>
 <span class="os-tag os-windows">Windows</span>
 <pre><code>./scripts/restore_db.ps1 -DumpFile "infra/backups/pgdata_2026-08-21T140005.dump" `
@@ -224,19 +289,19 @@ media_2026-08-21T140005.tar.gz</code></pre>
 <ol><li><strong>Revise la clave de cifrado (<code>PII_FIELD_KEY</code>).</strong> Si esa clave cambió entre el momento del respaldo y ahora, los datos de pacientes restaurados quedan ilegibles hasta corregirlo. Use la clave que estaba activa cuando se hizo ese respaldo, o ejecute:</li></ol>
 <pre><code>   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py reencrypt_pii --old-key &lt;CLAVE_DE_ESE_MOMENTO&gt;</code></pre>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Nunca restaure con la clave <code>PII_FIELD_KEY</code> equivocada esperando "arreglarlo después" — los datos de pacientes quedan permanentemente ilegibles bajo la clave incorrecta hasta ejecutar el paso de arriba con la clave correcta. Si no está seguro de cuál era la clave correcta en ese momento, deténgase y consulte a su desarrollador antes de continuar.</p></div>
-<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No borre el archivo de respaldo que acaba de usar hasta confirmar (Capítulo 7) que la restauración funcionó correctamente.</p></div>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>No borre el archivo de respaldo que acaba de usar hasta confirmar (Capítulo 8) que la restauración funcionó correctamente.</p></div>
 </section>
-<section id="7-verificación-posterior-a-la-restauración">
-<h2>7. Verificación posterior a la restauración</h2>
-<p>Después de restaurar y aplicar los dos pasos del Capítulo 6, confirme que todo quedó bien:</p>
+<section id="8-verificación-posterior-a-la-restauración">
+<h2>8. Verificación posterior a la restauración</h2>
+<p>Después de restaurar y aplicar los dos pasos del Capítulo 7, confirme que todo quedó bien:</p>
 <ol><li>Inicie sesión en el sistema con una cuenta conocida.</li><li>Abra el expediente de un paciente que sepa que existía en el respaldo restaurado y confirme que sus datos se ven correctamente.</li><li>Revise que la fecha/hora de los registros más recientes coincida con lo esperado del respaldo restaurado (no con datos posteriores, que ya no deberían estar ahí).</li><li>Confirme que la verificación de salud del sistema responde correctamente:</li></ol>
 <pre><code>   curl -k https://&lt;IP-del-servidor&gt;/api/health/</code></pre>
 <p>Solo después de confirmar estos cuatro puntos puede considerar la restauración exitosa y, si corresponde, archivar o limpiar respaldos antiguos con confianza.</p>
 </section>
-<section id="8-preguntas-frecuentes">
-<h2>8. Preguntas frecuentes</h2>
+<section id="9-preguntas-frecuentes">
+<h2>9. Preguntas frecuentes</h2>
 <p><strong>¿Cada cuánto debo respaldar?</strong> Como mínimo, una vez al día mediante la tarea programada del Capítulo 4. Si el volumen de pacientes es alto, considere respaldar con más frecuencia (cada 6–12 horas).</p>
-<p><strong>¿Dónde debo guardar la copia fuera del servidor?</strong> Cualquier lugar físicamente distinto al servidor: un disco externo que se retire del sitio, una carpeta de red en otro equipo, o un servicio de almacenamiento en la nube con cifrado y acceso restringido. Lo importante es que un problema con el servidor (robo, incendio, falla de disco) no afecte también a la copia.</p>
+<p><strong>¿Dónde debo guardar la copia fuera del servidor?</strong> Cualquier lugar físicamente distinto al servidor: un disco externo que se retire del sitio, una carpeta de red en otro equipo, o un servicio de almacenamiento en la nube con cifrado y acceso restringido. Lo importante es que un problema con el servidor (robo, incendio, falla de disco) no afecte también a la copia. Vea el Capítulo 6 para las opciones de nube y cómo manejar esas credenciales de forma segura.</p>
 <p><strong>¿Qué hago si el script de respaldo falla?</strong> Lea el mensaje de error que muestra en pantalla — usualmente indica si el servicio <code>db</code> no está corriendo, o si no hay espacio en disco. Si no logra resolverlo, guarde el mensaje de error completo y contacte a su desarrollador o a TI antes de intentar una restauración con un respaldo que pueda estar incompleto.</p>
 <p><strong>¿Puedo restaurar solo la base de datos sin las imágenes?</strong> Sí — omita el parámetro <code>-MediaArchive</code> al ejecutar <code>restore_db.ps1</code>. El script mostrará una advertencia recordando que las imágenes no se restauraron.</p>
 <p><strong>¿Es seguro practicar una restauración antes de que haya una emergencia real?</strong> Sí, y se recomienda hacerlo periódicamente — es la única forma de confirmar que el respaldo realmente funciona antes de necesitarlo de verdad. Hágalo en un momento de bajo uso y avise al personal de antemano, ya que la restauración reemplaza los datos actuales durante la prueba.</p>
