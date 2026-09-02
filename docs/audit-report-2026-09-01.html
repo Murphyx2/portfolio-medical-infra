@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Three-Track Audit</title>
+</head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --ink:#1b2027; --ink-soft:#5b6570; --ink-faint:#8b93a0;
+  --paper:#f1f2ef; --panel:#ffffff; --panel-2:#f7f8f6; --border:#dbded8; --border-soft:#e8eae5;
+  --accent:#3b5a7a; --accent-soft:#e7edf2; --accent-ink:#24405c;
+  --sev-high:#a13a2e; --sev-high-bg:#fbeae7; --sev-high-border:#e3b5ac;
+  --sev-med:#9a6a0a; --sev-med-bg:#faf1de; --sev-med-border:#e3c98c;
+  --sev-low:#4b6b57; --sev-low-bg:#eaf1ec; --sev-low-border:#bcd3c5;
+  --sev-info:#5c6f7c; --sev-info-bg:#eef1f3; --sev-info-border:#c6d0d5;
+  --sev-clean:#2f7d5e; --sev-clean-bg:#e7f4ee; --sev-clean-border:#a9d4bf;
+  --code-bg:#1b2027; --code-text:#dfe4e8; --code-border:#2c333d;
+  --shadow: 0 1px 2px rgba(27,32,39,.04), 0 8px 24px -12px rgba(27,32,39,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e7e9ec; --ink-soft:#a7afb8; --ink-faint:#707982;
+    --paper:#14171b; --panel:#1b1f24; --panel-2:#20242a; --border:#2c323a; --border-soft:#252a30;
+    --accent:#7fa3c4; --accent-soft:#1e2a35; --accent-ink:#a8c4dc;
+    --sev-high:#e08579; --sev-high-bg:#2c1a17; --sev-high-border:#5a2e27;
+    --sev-med:#dcb15c; --sev-med-bg:#2a2214; --sev-med-border:#5c4a25;
+    --sev-low:#8fbca3; --sev-low-bg:#182420; --sev-low-border:#33483d;
+    --sev-info:#a3b3bc; --sev-info-bg:#1c2226; --sev-info-border:#38424a;
+    --sev-clean:#7fc7a3; --sev-clean-bg:#152420; --sev-clean-border:#2c4a3c;
+    --code-bg:#0d0f12; --code-text:#d7dce1; --code-border:#262b31;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e7e9ec; --ink-soft:#a7afb8; --ink-faint:#707982;
+  --paper:#14171b; --panel:#1b1f24; --panel-2:#20242a; --border:#2c323a; --border-soft:#252a30;
+  --accent:#7fa3c4; --accent-soft:#1e2a35; --accent-ink:#a8c4dc;
+  --sev-high:#e08579; --sev-high-bg:#2c1a17; --sev-high-border:#5a2e27;
+  --sev-med:#dcb15c; --sev-med-bg:#2a2214; --sev-med-border:#5c4a25;
+  --sev-low:#8fbca3; --sev-low-bg:#182420; --sev-low-border:#33483d;
+  --sev-info:#a3b3bc; --sev-info-bg:#1c2226; --sev-info-border:#38424a;
+  --sev-clean:#7fc7a3; --sev-clean-bg:#152420; --sev-clean-border:#2c4a3c;
+  --code-bg:#0d0f12; --code-text:#d7dce1; --code-border:#262b31;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:'Public Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+  font-size:15.5px; line-height:1.62;
+}
+h1,h2,h3{font-family:'Source Serif 4',Georgia,serif; text-wrap:balance; color:var(--ink); margin:0}
+code, .mono{font-family:'JetBrains Mono',ui-monospace,Consolas,monospace}
+
+a{color:var(--accent-ink)}
+a:focus-visible, button:focus-visible, .toc a:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* ---- shell ---- */
+.shell{display:grid; grid-template-columns:260px minmax(0,1fr); max-width:1180px; margin:0 auto; min-height:100vh}
+@media (max-width:920px){ .shell{grid-template-columns:1fr} }
+
+/* ---- sidebar ---- */
+.sidebar{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  padding:28px 22px 28px 28px; border-right:1px solid var(--border-soft);
+}
+@media (max-width:920px){ .sidebar{position:static; height:auto; border-right:none; border-bottom:1px solid var(--border-soft)} }
+.brand{display:flex; align-items:baseline; gap:8px; margin-bottom:2px}
+.brand-mark{font-family:'JetBrains Mono'; font-size:11px; letter-spacing:.08em; color:var(--accent); background:var(--accent-soft); border:1px solid var(--border); padding:2px 6px; border-radius:3px}
+.sidebar .doc-title{font-size:15px; font-weight:600; margin-top:10px; color:var(--ink)}
+.sidebar .doc-meta{font-family:'JetBrains Mono'; font-size:11.5px; color:var(--ink-faint); margin-top:6px; line-height:1.7}
+.toc{margin-top:26px; padding-top:20px; border-top:1px solid var(--border-soft)}
+.toc-label{font-family:'JetBrains Mono'; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:10px}
+.toc ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
+.toc a{display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink-soft); font-size:13.5px; padding:6px 8px; border-radius:5px; transition:background .12s, color .12s}
+.toc a:hover{background:var(--panel-2); color:var(--ink)}
+.toc .count{margin-left:auto; font-family:'JetBrains Mono'; font-size:11px; color:var(--ink-faint)}
+.toc .dot{width:7px; height:7px; border-radius:50%; flex:none}
+
+/* ---- main ---- */
+main{padding:44px 40px 90px; min-width:0}
+@media (max-width:640px){ main{padding:32px 20px 70px} }
+.cover{max-width:700px; margin-bottom:44px}
+.cover .eyebrow{font-family:'JetBrains Mono'; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:14px}
+.cover h1{font-size:clamp(32px,4.4vw,44px); font-weight:600; line-height:1.12}
+.cover p.lede{font-size:17px; color:var(--ink-soft); margin-top:16px; max-width:62ch}
+
+/* ---- stat strip ---- */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin:32px 0 0; box-shadow:var(--shadow)}
+.stat{background:var(--panel); padding:16px 18px}
+.stat .n{font-family:'JetBrains Mono'; font-variant-numeric:tabular-nums; font-size:26px; font-weight:600; line-height:1}
+.stat .l{font-size:11.5px; color:var(--ink-soft); margin-top:6px}
+.stat.high .n{color:var(--sev-high)}
+.stat.med .n{color:var(--sev-med)}
+.stat.low .n{color:var(--sev-low)}
+.stat.clean .n{color:var(--sev-clean)}
+
+/* ---- track section ---- */
+.track{margin-top:72px; scroll-margin-top:24px}
+.track-head{display:flex; align-items:baseline; gap:14px; padding-bottom:16px; border-bottom:2px solid var(--ink)}
+.track-head h2{font-size:26px; font-weight:600}
+.track-head .idx{font-family:'JetBrains Mono'; font-size:13px; color:var(--ink-faint)}
+.verdict{margin:18px 0 0; font-size:15.5px; color:var(--ink-soft); max-width:70ch}
+.verdict strong{color:var(--ink)}
+
+/* ---- finding card ---- */
+.finding{margin-top:22px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px 22px; box-shadow:var(--shadow)}
+.finding-head{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap}
+.badge{font-family:'JetBrains Mono'; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; padding:3px 9px; border-radius:20px; border:1px solid; white-space:nowrap}
+.badge.high{color:var(--sev-high); background:var(--sev-high-bg); border-color:var(--sev-high-border)}
+.badge.med{color:var(--sev-med); background:var(--sev-med-bg); border-color:var(--sev-med-border)}
+.badge.low{color:var(--sev-low); background:var(--sev-low-bg); border-color:var(--sev-low-border)}
+.badge.info{color:var(--sev-info); background:var(--sev-info-bg); border-color:var(--sev-info-border)}
+.finding h3{font-size:17px; font-weight:600; flex:1; min-width:200px; line-height:1.35}
+.finding p{margin:12px 0 0; color:var(--ink-soft); max-width:72ch}
+.cite{margin-top:12px; display:flex; flex-wrap:wrap; gap:6px}
+.cite code{display:inline-block; font-size:12px; background:var(--panel-2); border:1px solid var(--border); color:var(--accent-ink); padding:3px 8px; border-radius:5px}
+.fix{margin-top:14px; padding:12px 14px; background:var(--panel-2); border-left:3px solid var(--accent); border-radius:0 6px 6px 0; font-size:14px}
+.fix .fix-label{font-family:'JetBrains Mono'; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink); margin-bottom:4px; display:block}
+.note{margin-top:12px; padding:10px 14px; background:var(--sev-info-bg); border:1px solid var(--sev-info-border); border-radius:6px; font-size:13.5px; color:var(--ink-soft)}
+.note strong{color:var(--ink)}
+
+/* ---- verified list ---- */
+.verified{margin-top:26px}
+.verified summary{cursor:pointer; font-size:14px; font-weight:600; color:var(--ink); padding:12px 16px; background:var(--sev-clean-bg); border:1px solid var(--sev-clean-border); border-radius:8px; list-style:none; display:flex; align-items:center; gap:8px}
+.verified summary::-webkit-details-marker{display:none}
+.verified summary::before{content:"\25B8"; color:var(--sev-clean); transition:transform .15s}
+.verified[open] summary::before{transform:rotate(90deg)}
+.verified ul{margin:10px 2px 0; padding:14px 20px; background:var(--panel); border:1px solid var(--border-soft); border-radius:8px; list-style:none; display:flex; flex-direction:column; gap:9px}
+.verified li{font-size:13.5px; color:var(--ink-soft); padding-left:20px; position:relative}
+.verified li::before{content:"\2713"; position:absolute; left:0; color:var(--sev-clean); font-weight:700}
+.verified code{font-size:12px; background:var(--panel-2); border:1px solid var(--border); padding:1px 5px; border-radius:4px; color:var(--accent-ink)}
+
+/* ---- priority list ---- */
+.priority{margin-top:30px; background:var(--code-bg); color:var(--code-text); border-radius:10px; padding:24px 26px; box-shadow:var(--shadow)}
+.priority h2{color:var(--code-text); font-size:19px; font-weight:600}
+.priority ol{margin:16px 0 0; padding:0 0 0 22px; display:flex; flex-direction:column; gap:10px}
+.priority li{font-size:14.5px; line-height:1.55}
+.priority li::marker{font-family:'JetBrains Mono'; color:var(--accent)}
+.priority .tag{font-family:'JetBrains Mono'; font-size:10.5px; letter-spacing:.05em; color:#8fa6bd; margin-right:6px}
+
+footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--border-soft); font-size:12.5px; color:var(--ink-faint); font-family:'JetBrains Mono'}
+
+@media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important} }
+</style>
+
+<div class="shell">
+  <nav class="sidebar" aria-label="Audit sections">
+    <div class="brand"><span class="brand-mark">AUD-2026-09-01</span></div>
+    <div class="doc-title">MedicalConsultations</div>
+    <div class="doc-meta">Three-track review<br>Architecture &middot; Security &middot; Database<br>backend + frontend + infra</div>
+    <div class="toc">
+      <div class="toc-label">Contents</div>
+      <ul>
+        <li><a href="#summary"><span class="dot" style="background:var(--ink-faint)"></span>Summary</a></li>
+        <li><a href="#architecture"><span class="dot" style="background:var(--sev-clean)"></span>Architecture<span class="count">3</span></a></li>
+        <li><a href="#security"><span class="dot" style="background:var(--sev-high)"></span>Security<span class="count">5</span></a></li>
+        <li><a href="#database"><span class="dot" style="background:var(--sev-med)"></span>Database<span class="count">6</span></a></li>
+        <li><a href="#priority"><span class="dot" style="background:var(--accent)"></span>Priority order</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <section class="cover" id="summary">
+      <div class="eyebrow">Engineering audit &middot; report-only, no fixes applied</div>
+      <h1>Three-track audit</h1>
+      <p class="lede">Three independent reviews of the MedicalConsultations bundle — architecture, security, and database — run in parallel and cross-checked before publishing. Every finding below cites an exact file and, where relevant, a line number.</p>
+      <div class="stats">
+        <div class="stat high"><div class="n">2</div><div class="l">High severity</div></div>
+        <div class="stat med"><div class="n">6</div><div class="l">Medium severity</div></div>
+        <div class="stat low"><div class="n">2</div><div class="l">Low / info</div></div>
+        <div class="stat clean"><div class="n">3</div><div class="l">Tracks reviewed</div></div>
+      </div>
+    </section>
+
+    <!-- ============ ARCHITECTURE ============ -->
+    <section class="track" id="architecture">
+      <div class="track-head"><span class="idx">01</span><h2>Architecture</h2></div>
+      <p class="verdict"><strong>Clean bill of health.</strong> The codebase is already unusually well-consolidated — several shared modules (<code>SwapPermissionsMixin</code>, <code>apply_masking</code>, <code>CoreModelSerializer</code>, the frontend <code>ListPage</code> shell) carry docstrings documenting the exact duplication they were built to eliminate. What remains is residue that escaped those refactors, not an unaddressed pattern. Verified clean: cross-app model imports, PII-masking duplication, reference-data CRUD boilerplate, RBAC gating, and the shared fetch wrapper.</p>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge low">Low</span><h3>Three ViewSets hand-roll logic that <code>SwapPermissionsMixin</code> already exists to replace</h3></div>
+        <p><code>SwapPermissionsMixin</code> in <code>apps/core/mixins.py</code> exists specifically to eliminate a repeated <code>get_permissions()</code> body — but two <code>doctors</code> ViewSets and one <code>centers</code> ViewSet still write it by hand instead of inheriting the mixin.</p>
+        <div class="cite">
+          <code>backend/apps/doctors/views.py:46-53</code>
+          <code>backend/apps/doctors/views.py:97-105</code>
+          <code>backend/apps/centers/views.py:45-48</code>
+        </div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Add <code>SwapPermissionsMixin</code> to each class's bases and replace the hand-written method with a <code>write_permission_classes</code> assignment, matching <code>AppointmentViewSet</code>/<code>EncounterViewSet</code>.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge info">Info</span><h3>Reportes app keeps a private copy of the swap-permissions idiom</h3></div>
+        <p><code>_ReportesSwapPermissionsMixin</code> reimplements the same shape as the shared mixin, keyed on viewer/editor roles rather than SAFE/non-SAFE — a legitimately different policy, not pure duplication, but a second private copy of the idiom living outside <code>apps/core</code>.</p>
+        <div class="cite"><code>backend/apps/reportes/views.py:25-35</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>No urgent merge — the shared mixin would need an action-based branch it doesn't have today. Flagged for awareness only.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge info">Info</span><h3>A 2-line role check is repeated twice in the same file</h3></div>
+        <p><code>const isCenterManager = user?.role === "CENTER_MANAGER"</code> appears in two different components inside the same file — a business-logic branch, not an RBAC bypass, but worth hoisting to avoid drift.</p>
+        <div class="cite">
+          <code>frontend/src/pages/Reportes.tsx:196-197</code>
+          <code>frontend/src/pages/Reportes.tsx:437-438</code>
+        </div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Extract a small <code>useIsCenterManager()</code> hook or a top-of-file constant.</div>
+      </div>
+
+      <details class="verified">
+        <summary>9 areas checked and found clean</summary>
+        <ul>
+          <li>Cross-app model imports — every <code>apps/*/models.py</code> import is <code>apps.core.*</code> (allowed shared infra); no app imports another app's model directly.</li>
+          <li>PII masking — <code>apps/core/masking.py::apply_masking</code> is the single funnel; every masking-eligible serializer routes through it declaratively.</li>
+          <li><code>CoreModelSerializer</code> is used consistently everywhere an <code>active</code> field / masking need exists; the serializers that skip it correctly have no such need.</li>
+          <li>Reference-data CRUD — <code>ReferenceDataViewSet</code> is reused by all 9 reference-list endpoints, not reimplemented per app.</li>
+          <li>Center-scoping helper (<code>user_accessible_center_ids</code>) has exactly one implementation.</li>
+          <li>Frontend list/table shell — <code>ListPage.tsx</code> is shared by 15 page files; its own docstring notes it replaced byte-identical copy-paste.</li>
+          <li>Modal/dialog primitives (<code>Dialog</code>, <code>FormModal</code>, <code>ConfirmDialog</code>) are shared; page-specific dialogs build on top rather than reimplementing chrome.</li>
+          <li>RBAC gating — <code>can.ts</code> is the only role-check surface outside legitimate business-logic branches.</li>
+          <li>Fetch wrapper — only <code>services/api.ts</code> calls <code>fetch</code> directly anywhere in the frontend.</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- ============ SECURITY ============ -->
+    <section class="track" id="security">
+      <div class="track-head"><span class="idx">02</span><h2>Security</h2></div>
+      <p class="verdict">Two high-severity findings, both confirmed by direct inspection. Everything else checked — JWT handling, PII encryption, media token auth, response headers, dependency versions, the WhatsApp webhook signature check — came back clean.</p>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge high">High</span><h3>Live production secrets sitting in an untracked, non-gitignored file</h3></div>
+        <p>A stray file with a leading-space filename holds the <strong>currently active</strong> <code>DJANGO_SECRET_KEY</code>, <code>PII_FIELD_KEY</code>, <code>POSTGRES_PASSWORD</code>, and <code>REDIS_PASSWORD</code>, byte-identical to the real <code>.env</code>. Because the filename doesn't match <code>.gitignore</code>'s <code>.env</code> / <code>.env.*</code> patterns, <code>git status</code> shows it as untracked-but-not-ignored — a broad <code>git add</code> would commit real secrets.</p>
+        <div class="cite"><code>infra/ - Copy.env</code></div>
+        <div class="note"><strong>Corrected during verification:</strong> the audit agent also reported a second copy at <code>backend/ - Copy.env</code> — checked directly, that file does not exist. Only the <code>infra/</code> copy is real.</div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Delete the file (not committed anywhere — <code>git log --all -- "*.env"</code> returns empty, so no history exposure). Consider broadening <code>.gitignore</code> to catch stray env-like filenames going forward.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge high">High</span><h3>Patient name shown unmasked to IT and Center Manager in Comunicaciones</h3></div>
+        <p><code>DeliverySerializer.get_patient_name</code> returns the patient's real <code>full_name</code> with no <code>is_masked_role</code>/<code>apply_masking</code> gate — unlike every other PII-bearing serializer in the app. The endpoint is reachable by all six roles including IT and Center Manager, whose PII should be masked per the project's own masking policy. This is a regression introduced in the newer Comunicaciones module, not a re-report of a closed finding. Verified directly: <code>get_address_masked</code> on the same serializer correctly masks contact info — the name field looks like an oversight, not a deliberate choice.</p>
+        <div class="cite">
+          <code>backend/apps/communications/serializers.py:195-196</code>
+          <code>backend/apps/communications/views.py:218,227-232</code>
+        </div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Route <code>get_patient_name</code> through <code>apply_masking</code>/<code>is_masked_role</code> like every other patient-PII serializer, and add a regression test in the existing <code>test_fix_*</code> convention.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge med">Medium</span><h3>XLSX formula injection in exported reports</h3></div>
+        <p>Service/medicine name strings are written into <code>openpyxl</code> cells with no sanitization of a leading <code>=</code>, <code>+</code>, <code>-</code>, or <code>@</code>. A name starting with one of these characters (creatable by RECEPTIONIST and other roles with reference-list edit rights) becomes a live formula that Excel evaluates on open — a classic exfiltration vector against whoever opens the report, typically ADMIN/finance staff.</p>
+        <div class="cite"><code>backend/apps/reportes/services/excel.py:51-56</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Prefix any cell value beginning with <code>=</code>/<code>+</code>/<code>-</code>/<code>@</code> with a neutral character before writing, applied everywhere free text lands in a generated workbook.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge low">Low</span><h3>WhatsApp verify token stored in plaintext</h3></div>
+        <p><code>whatsapp_verify_token</code> is a plain <code>CharField</code>, unlike its siblings <code>whatsapp_access_token</code>/<code>whatsapp_app_secret</code> on the same model — which a code comment explicitly says are "encrypted at rest like other server-side secrets." The verify token alone can't send messages or read data, so impact is limited, but the handling is inconsistent with the model's own stated intent.</p>
+        <div class="cite"><code>backend/apps/communications/models.py:22-24</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Switch to <code>EncryptedCharField</code> for consistency, or document why it's deliberately excluded.</div>
+      </div>
+
+      <details class="verified">
+        <summary>15 controls verified secure</summary>
+        <ul>
+          <li>No secrets ever committed to git history in any of the 3 repos.</li>
+          <li><code>config/settings/prod.py</code> fails fast on placeholder/missing <code>SECRET_KEY</code>, <code>ALLOWED_HOSTS</code>, <code>PII_FIELD_KEY</code>.</li>
+          <li>Prod forces secure cookies, HSTS, and <code>X-Frame-Options: DENY</code>.</li>
+          <li>Dev compose binds Postgres/Redis to loopback only; prod Redis requires a password.</li>
+          <li>JWT access token held in memory only; refresh token in an httpOnly, <code>SameSite=Strict</code> cookie with rotation and blacklist-after-rotation.</li>
+          <li><code>/api/schema/</code> and <code>/api/docs/</code> confirmed 401 for unauthenticated requests.</li>
+          <li><code>/media/&lt;path&gt;</code> requires a valid signed token; path traversal guarded.</li>
+          <li>IT role force-stripped of <code>is_staff</code>/<code>is_superuser</code> at the model level.</li>
+          <li>WhatsApp webhook signature verification uses <code>hmac.compare_digest</code>, never a naive comparison.</li>
+          <li>No <code>dangerouslySetInnerHTML</code> in the frontend; no <code>mark_safe</code>/<code>format_html</code> on user input in the backend.</li>
+          <li>No raw SQL string interpolation anywhere in the codebase.</li>
+          <li>No high/critical findings in dependency scans (npm audit; backend package versions current).</li>
+          <li>Invalid JWT returns a generic, safe error body — no stack trace or algorithm internals leaked.</li>
+          <li><code>NoStoreMiddleware</code> confirmed live on API responses.</li>
+          <li>CSP/HSTS/X-Frame-Options/X-Content-Type-Options all present in the nginx config.</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- ============ DATABASE ============ -->
+    <section class="track" id="database">
+      <div class="track-head"><span class="idx">03</span><h2>Database</h2></div>
+      <p class="verdict">No critical issues. The most significant finding is a query pattern that can't use an index and runs twice per report. N+1 queries, foreign-key indexing, and encrypted-field search discipline were all checked across every app and came back clean.</p>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge med">Medium</span><h3>Non-sargable date filter forces a full scan on every report run</h3></div>
+        <p>Filtering <code>__year=</code>/<code>__month=</code> on a <code>Coalesce()</code> of two datetime columns can't use any index on either underlying column — Postgres evaluates the expression per row. Confirmed directly: the query also runs twice per request (once for a row-count guard, once for the real aggregate), doubling the cost.</p>
+        <div class="cite"><code>backend/apps/reportes/services/engine.py:52-59</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Replace the year/month extraction with a half-open date range filter (<code>__gte</code>/<code>__lt</code>) so a plain or expression index becomes usable; add a composite index sized to this query's actual filter shape (<code>status</code>, <code>center</code>, date).</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge med">Medium</span><h3>A migration breaks the project's own schema/index-separation convention</h3></div>
+        <p>This migration combines an <code>AlterField</code> on an encrypted column with two <code>UniqueConstraint</code>s (each backed by an index) in the same transaction — the one place in the <code>patients</code> history where the documented split (schema / backfill / index as separate migrations) wasn't followed.</p>
+        <div class="cite"><code>backend/apps/patients/migrations/0012_alter_patient_cedula_and_more.py:16-28</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>No action needed if already applied cleanly in production — flagged as a template hazard so it isn't copied as precedent for the next encrypted-field change.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge med">Medium</span><h3>Same distinct()-plus-default-ordering pattern already fixed once elsewhere</h3></div>
+        <p>The default model ordering is never cleared before <code>.distinct()</code> — the exact shape a comment elsewhere in the codebase documents as a known past bug (Postgres must append ORDER BY columns to the SELECT list for DISTINCT compatibility, which can silently defeat deduplication). It happens not to break results here only because the ordering column is functionally dependent on <code>id</code> — incidental safety, not structural.</p>
+        <div class="cite"><code>backend/apps/core/services/search.py:57-60</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Add an explicit <code>.order_by()</code> before <code>.distinct()</code>, mirroring the fix already applied in <code>reportes/services/engine.py</code>.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge low">Low</span><h3>No resource limits or tuning on the database container</h3></div>
+        <p>Neither compose file sets memory/CPU limits or a tuned <code>postgresql.conf</code> for the <code>db</code> service — it runs on stock image defaults on what the project's own docs describe as a single laptop-class host. Connection-count risk is low today (pooling and worker count are both sane), but nothing stops Postgres or a sibling container from starving host resources under load.</p>
+        <div class="cite"><code>infra/docker-compose.yml:6-20</code> <code>infra/docker-compose.prod.yml:8-9</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Add resource limits to the prod overlay and set at least <code>shared_buffers</code>/<code>max_connections</code>/<code>work_mem</code> explicitly.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge low">Low</span><h3>Backups remain manual and unscheduled</h3></div>
+        <p>Already known and documented by the project itself, restated here because it's squarely a database-relevant gap for a PHI workload: no cron/Task Scheduler entry exists anywhere in <code>infra/</code>, so backup cadence depends entirely on someone remembering to run the script.</p>
+        <div class="cite"><code>infra/docs/backups.md:15-17</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Wire the existing backup script into Task Scheduler (or a small polling container, matching the pattern already used for Comunicaciones) before real patient data lands.</div>
+      </div>
+
+      <div class="finding">
+        <div class="finding-head"><span class="badge info">Info</span><h3>Report engine's indexes don't cover its real filter combination</h3></div>
+        <p>Existing indexes optimize for the admission-flow access pattern (patient, status, created_at) — none touches <code>center</code>, which the reporting engine filters by alongside status and a date range.</p>
+        <div class="cite"><code>backend/apps/encounters/models.py:88-92</code></div>
+        <div class="fix"><span class="fix-label">Recommendation</span>Once the date-filter fix above lands, add a composite index sized to the report engine's actual access pattern.</div>
+      </div>
+
+      <details class="verified">
+        <summary>4 areas checked and found clean</summary>
+        <ul>
+          <li>N+1 queries — every <code>views.py</code> checked declares correct <code>select_related</code>/<code>prefetch_related</code>, including nested FK chains and reverse relations feeding computed fields.</li>
+          <li>Foreign-key index coverage — Django auto-indexes every FK; existing composite indexes all match a real filter path in a corresponding view.</li>
+          <li>Encrypted-field search discipline — no queryset filters or orders directly on an encrypted column anywhere; all search paths correctly go through the plaintext search/hash helper columns, applied consistently to newer models too.</li>
+          <li>Migration churn (23 in <code>patients</code>, 15 in <code>records</code>) reflects genuine feature history, not aimless thrash — not flagged as squash-worthy.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="priority" id="priority">
+      <h2>Priority order</h2>
+      <ol>
+        <li><span class="tag">01</span>Delete <code>infra/ - Copy.env</code> — trivial, zero-risk removal of live secrets sitting outside gitignore's reach.</li>
+        <li><span class="tag">02</span>Fix the Comunicaciones patient-name masking gap and add a regression test.</li>
+        <li><span class="tag">03</span>Sanitize spreadsheet cell values in the reportes Excel export to close the formula-injection vector.</li>
+        <li><span class="tag">04</span>Switch the report engine's date filter to a range query and add a matching index.</li>
+        <li><span class="tag">05</span>Add an explicit <code>order_by()</code> before the <code>distinct()</code> in the patient search helper.</li>
+        <li><span class="tag">06</span>Everything else — the three architecture cleanups, the WhatsApp verify-token encryption, resource limits, and scheduled backups — can be picked up opportunistically; none is urgent on its own.</li>
+      </ol>
+    </section>
+
+    <footer>Report-only audit — no code was modified. Findings compiled from three independently-run reviews; a sample was spot-verified against the live repositories before publishing (one claim in the Security track was corrected during that check).</footer>
+  </main>
+</div>
+</body></html>

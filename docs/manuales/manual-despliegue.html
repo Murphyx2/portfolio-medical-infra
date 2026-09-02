@@ -328,6 +328,21 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f [servici
 <p>Después de recibir código nuevo del equipo de desarrollo, reconstruya y reinicie:</p>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build</code></pre>
 <div class="callout note"><span class="callout-label">Nota</span><p>Los cambios en ajustes del día a día (reglas de bloqueo de sesión, duración de sesiones, tamaño máximo de archivos, etc.) normalmente <strong>no</strong> requieren tocar Docker — un administrador puede cambiarlos directamente desde la página de Configuración dentro del sistema.</p></div>
+<h3>Actualizar el catálogo de precios de Servicios (tarifario y precios por ARS)</h3>
+<p>Cuando el tarifario oficial de INCAF cambie, o se deba cargar/actualizar el precio de un Servicio por ARS o por ARS + Programa, un desarrollador puede usar dos comandos del backend en lugar de editarlos uno por uno desde la página de Servicios / Gestionar precios. Ambos comandos son seguros de ejecutar varias veces (no duplican datos) y soportan <code>--dry-run</code> para previsualizar los cambios sin guardarlos:</p>
+<pre><code># 1. Copiar el archivo Excel del tarifario dentro del contenedor
+docker cp "TARIFARIO INCAF, COD SIMON.xlsx" mc_backend:/tmp/tarifario.xlsx
+
+# 2. Previsualizar los cambios (no escribe nada todavía)
+docker exec mc_backend python manage.py import_tarifario --file /tmp/tarifario.xlsx --dry-run
+
+# 3. Aplicar los cambios de verdad
+docker exec mc_backend python manage.py import_tarifario --file /tmp/tarifario.xlsx</code></pre>
+<p>Este comando actualiza el precio <strong>Privado</strong> de los servicios que ya existen (por nombre) y crea los que falten en el catálogo. El <strong>Co-pago</strong> por defecto y el tipo de servicio de una fila ya existente nunca se tocan.</p>
+<p>Para cargar precios específicos por ARS o por ARS + Programa (lo que se ve en la página <strong>Gestionar precios</strong>), se usa un segundo comando con un archivo de datos en formato JSON (ver ejemplos en <code>backend/apps/services/management/data/</code>):</p>
+<pre><code>docker exec mc_backend python manage.py import_ars_service_prices --file /app/apps/services/management/data/&lt;archivo&gt;.json --dry-run
+docker exec mc_backend python manage.py import_ars_service_prices --file /app/apps/services/management/data/&lt;archivo&gt;.json</code></pre>
+<div class="callout note"><span class="callout-label">Nota</span><p>Estos dos comandos son una solución de transición. Es probable que en una futura versión del sistema se reemplacen por una <strong>carga masiva por archivo CSV</strong> directamente desde la página Gestionar precios (sin pasar por la terminal) — si esa función ya existe cuando usted lea esto, prefiérala en lugar de estos comandos.</p></div>
 </section>
 <section id="10-respaldos">
 <h2>10. Respaldos</h2>
