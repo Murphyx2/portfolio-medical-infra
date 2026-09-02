@@ -72,7 +72,7 @@ Si un usuario introdujo su contraseña incorrectamente varias veces, su cuenta q
 3. Use **"Nuevo precio"** para agregar una excepción, o **"Editar"** en una fila existente.
 4. Estos precios se guardan automáticamente en cada línea de un encuentro cuando se crea (según la ARS del paciente) — no se muestran todavía en el formulario del encuentro; su efecto se ve en los reportes de "Servicios prestados" / "Paquete ARS".
 
-> (NOTE) Cuando hay muchos precios que cargar o actualizar de una sola vez (por ejemplo, un tarifario nuevo completo), su desarrollador puede hacerlo mediante un script en lugar de una fila a la vez — consulte el **Manual de Despliegue**, sección 9. Esa es una solución temporal; es probable que más adelante se agregue una carga masiva por archivo CSV directamente desde esta página.
+> (NOTE) Cuando hay muchos precios que cargar o actualizar de una sola vez (por ejemplo, un tarifario nuevo completo), su desarrollador puede hacerlo mediante un script en lugar de una fila a la vez — consulte el **Manual de Despliegue**, sección 10. Esa es una solución temporal; es probable que más adelante se agregue una carga masiva por archivo CSV directamente desde esta página.
 
 ### Configurar Comunicaciones (correo y WhatsApp)
 
