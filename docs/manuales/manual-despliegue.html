@@ -139,9 +139,10 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 <li><a href="#8-primer-despliegue">8. Primer despliegue</a></li>
 <li><a href="#9-capítulo-de-red-y-seguridad">9. Capítulo de Red y Seguridad</a></li>
 <li><a href="#10-operación-día-a-día">10. Operación día a día</a></li>
-<li><a href="#11-respaldos">11. Respaldos</a></li>
-<li><a href="#12-solución-de-problemas">12. Solución de problemas</a></li>
-<li><a href="#13-anexo-referencia-completa-de-env">13. Anexo — referencia completa de <code>.env</code></a></li></ol>
+<li><a href="#11-cortes-de-energía-y-arranque-automático">11. Cortes de energía y arranque automático</a></li>
+<li><a href="#12-respaldos">12. Respaldos</a></li>
+<li><a href="#13-solución-de-problemas">13. Solución de problemas</a></li>
+<li><a href="#14-anexo-referencia-completa-de-env">14. Anexo — referencia completa de <code>.env</code></a></li></ol>
 </nav>
 <main>
   <div class="doc-header">
@@ -191,7 +192,7 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 <ol><li>Instale Docker Engine (no Desktop) siguiendo la guía oficial de Microsoft/Docker para Windows Server, o pida a TI que lo haga con el paquete <code>mirantis/docker</code> o <code>docker-ce</code> correspondiente a la versión del servidor.</li><li>Confirme igual que en Windows 10/11:</li></ol>
 <pre><code>   docker --version
    docker compose version</code></pre>
-<div class="callout note"><span class="callout-label">Nota</span><p>En Windows Server, el firewall puede mostrar el perfil de red como <strong>Dominio</strong> en vez de <strong>Privado</strong> si el servidor está unido a un dominio de Active Directory — revise cuál perfil aplica antes de crear las reglas del Capítulo 8, y use ese perfil (nunca "Público" ni "Cualquiera").</p></div>
+<div class="callout note"><span class="callout-label">Nota</span><p>En Windows Server, el firewall puede mostrar el perfil de red como <strong>Dominio</strong> en vez de <strong>Privado</strong> si el servidor está unido a un dominio de Active Directory — revise cuál perfil aplica antes de crear las reglas del Capítulo 9, y use ese perfil (nunca "Público" ni "Cualquiera").</p></div>
 <h3>Linux (Ubuntu / Debian y similares)</h3>
 <ol><li>Ejecute el script oficial de instalación:</li></ol>
 <pre><code>   curl -fsSL https://get.docker.com | sh</code></pre>
@@ -261,7 +262,7 @@ docker run --rm python:3.13-alpine sh -c "pip install -q cryptography &amp;&amp;
 DJANGO_CORS_ALLOWED_ORIGINS=https://192.168.1.42</code></pre>
 <div class="callout tip"><span class="callout-label">Recomendación</span><p>Pida a quien administre la red que <strong>reserve</strong> esa dirección IP para el servidor (una "reserva DHCP" o "IP estática"), para que no cambie después de un reinicio del router.</p></div>
 <h3>Reservar la IP del servidor (evitar que cambie)</h3>
-<p>Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y <strong>puede cambiarla</strong> después de un reinicio del router o de un corte eléctrico. Si eso ocurre, <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 12). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.</p>
+<p>Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y <strong>puede cambiarla</strong> después de un reinicio del router o de un corte eléctrico. Si eso ocurre, <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 13). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.</p>
 <p><strong>Método 1 — Reserva DHCP en el módem/router (recomendado)</strong></p>
 <ol>
 <li>Primero anote la <strong>dirección MAC</strong> del servidor (el identificador único de su tarjeta de red):
@@ -359,12 +360,75 @@ docker exec mc_backend python manage.py import_tarifario --file /tmp/tarifario.x
 docker exec mc_backend python manage.py import_ars_service_prices --file /app/apps/services/management/data/&lt;archivo&gt;.json</code></pre>
 <div class="callout note"><span class="callout-label">Nota</span><p>Estos dos comandos son una solución de transición. Es probable que en una futura versión del sistema se reemplacen por una <strong>carga masiva por archivo CSV</strong> directamente desde la página Gestionar precios (sin pasar por la terminal) — si esa función ya existe cuando usted lea esto, prefiérala en lugar de estos comandos.</p></div>
 </section>
-<section id="11-respaldos">
-<h2>11. Respaldos</h2>
+<section id="11-cortes-de-energía-y-arranque-automático">
+<h2>11. Cortes de energía y arranque automático</h2>
+<p>Este sistema se instala pensando en clínicas donde los cortes de electricidad son frecuentes. Hay dos preguntas separadas que resolver, y solo una de ellas viene resuelta de fábrica:</p>
+<ol>
+<li><strong>¿Los contenedores vuelven a arrancar solos una vez que Docker está corriendo?</strong> Sí — cada pieza del sistema (<code>docker-compose.yml</code>) tiene configurada la política <code>restart: unless-stopped</code>, así que en cuanto Docker vuelve a funcionar, todos los contenedores se reinician automáticamente sin que nadie ejecute ningún comando.</li>
+<li><strong>¿Docker mismo vuelve a arrancar solo, sin que nadie inicie sesión en la computadora?</strong> No, no por defecto en Windows 10/11 con Docker Desktop. Docker Desktop es un programa de escritorio — después de un corte de luz, Windows se queda esperando en la pantalla de inicio de sesión y nada arranca hasta que alguien entre físicamente con su contraseña. Esta sección resuelve ese segundo problema.</li>
+</ol>
+<h3>Paso 1 — Configurar el BIOS/UEFI para que la PC se encienda sola tras un corte</h3>
+<p>Por defecto, muchas computadoras se quedan <strong>apagadas</strong> cuando vuelve la luz después de un corte, en vez de encenderse solas. Corríjalo una sola vez:</p>
+<ol>
+<li>Reinicie la computadora y entre al BIOS/UEFI (usualmente presionando <code>F2</code>, <code>Del</code> o <code>F10</code> al encender — varía por fabricante).</li>
+<li>Busque la sección de administración de energía (<strong>Power Management</strong>, <strong>APM Configuration</strong> o similar).</li>
+<li>Busque la opción <strong>"Restore on AC/Power Loss"</strong>, <strong>"After Power Loss"</strong> o <strong>"AC Power Recovery"</strong>, y cámbiela a <strong>"Power On"</strong> (encender) — no "Power Off" ni "Last State" si su equipo lo permite, ya que "Last State" no enciende si la PC estaba apagada en el momento exacto del corte.</li>
+<li>Guarde los cambios y salga (usualmente <code>F10</code>).</li>
+</ol>
+<h3>Paso 2 — Arranque de Docker sin iniciar sesión (método recomendado): Docker Engine dentro de WSL2</h3>
+<p>Docker Desktop por sí solo no resuelve el arranque desatendido, porque es un programa que necesita una sesión de usuario abierta para funcionar. La forma más segura de evitar esto <strong>no es</strong> dejar la sesión de Windows abierta automáticamente — es dejar de depender de Docker Desktop y correr <strong>Docker Engine</strong> (el motor real, sin interfaz gráfica) dentro de WSL2, arrancado por el propio Windows como una tarea programada que no necesita ninguna sesión interactiva:</p>
+<ol>
+<li>Si WSL2 y una distribución Linux (por ejemplo Ubuntu) no están instaladas todavía, instálelas:
+<pre><code>wsl --install -d Ubuntu</code></pre>
+</li>
+<li>Habilite <code>systemd</code> dentro de esa distribución — abra una terminal de Ubuntu (WSL) y edite <code>/etc/wsl.conf</code>:
+<pre><code>sudo tee /etc/wsl.conf &lt;&lt;'EOF'
+[boot]
+systemd=true
+EOF</code></pre>
+Luego, desde PowerShell, reinicie WSL para que tome efecto:
+<pre><code>wsl --shutdown</code></pre>
+</li>
+<li>Instale Docker Engine dentro de la distribución con el mismo script oficial ya usado en la sección de Linux de este manual:
+<pre><code>curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER</code></pre>
+</li>
+<li>Active el arranque automático del motor con la propia distribución:
+<pre><code>sudo systemctl enable docker</code></pre>
+</li>
+<li>En Windows, abra el <strong>Programador de tareas</strong> (Task Scheduler) y cree una tarea nueva:
+<ul>
+<li><strong>Desencadenador:</strong> Al iniciar el sistema ("At startup").</li>
+<li><strong>Acción:</strong> Iniciar un programa → <code>wsl.exe</code> con el argumento <code>-d Ubuntu</code> (o el nombre de su distribución).</li>
+<li>Marque <strong>"Ejecutar tanto si el usuario inició sesión como si no"</strong> ("Run whether user is logged on or not").</li>
+<li>Marque <strong>"Ejecutar con los privilegios más altos"</strong> ("Run with highest privileges").</li>
+<li>Al guardar, Windows le pedirá la contraseña de la cuenta una sola vez — la guarda cifrada en su Administrador de credenciales (Credential Manager), no en texto plano.</li>
+</ul>
+</li>
+<li>A partir de aquí, los comandos <code>docker</code> / <code>docker compose</code> de este manual se ejecutan desde una terminal de WSL (Ubuntu), o anteponiendo <code>wsl</code> a los comandos desde PowerShell.</li>
+</ol>
+<div class="callout note"><span class="callout-label">Nota</span><p>Este es exactamente el mismo principio que ya usa la instalación en <strong>Windows Server</strong> (sección 3): un motor de contenedores corriendo en segundo plano como servicio, sin necesitar ninguna sesión de escritorio abierta. WSL2 simplemente trae ese mismo patrón a Windows 10/11.</p></div>
+<div class="callout tip"><span class="callout-label">Recomendación</span><p>Con esto configurado, Docker Desktop puede quedarse instalado sin problema (ya no hace falta abrirlo) o desinstalarse — ya no es lo que mantiene los contenedores corriendo.</p></div>
+<h3>Alternativa más simple, pero menos segura: inicio de sesión automático de Windows</h3>
+<p>Use esta alternativa <strong>solo</strong> si configurar WSL2 no es viable de inmediato. Es más simple, pero tiene una debilidad real de seguridad que hay que aceptar conscientemente.</p>
+<div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Activar el inicio de sesión automático de Windows significa que cualquier persona con acceso físico a la computadora encuentra una sesión ya abierta, sin que se le pida contraseña. Solo es aceptable si el servidor está en un cuarto o clóset con acceso físico controlado (con llave, o restringido al personal de TI). Use una cuenta local <strong>sin privilegios de administrador</strong>, dedicada solo a esto — nunca la cuenta de administrador que se usa para gestionar el servidor.</p></div>
+<ol>
+<li>Cree una cuenta local dedicada, sin privilegios de administrador.</li>
+<li>Ejecute <code>netplwiz</code>, desmarque <strong>"Los usuarios deben escribir su nombre y contraseña..."</strong> para esa cuenta, y confirme la contraseña.
+<ul><li>Alternativa algo más segura: la herramienta <strong>Autologon</strong> de Sysinternals (Microsoft) guarda la contraseña cifrada mediante el almacén LSA de Windows, en vez del valor <code>DefaultPassword</code> en texto plano que usa el método del registro — prefiérala si de todas formas va a usar inicio de sesión automático.</li></ul>
+</li>
+<li>En Docker Desktop, active la opción <strong>"Start Docker Desktop when you log in"</strong> (Configuración → General).</li>
+</ol>
+<h3>UPS (batería de respaldo) — reducir el riesgo de corrupción de datos</h3>
+<p>Un corte de luz abrupto no es lo mismo que un apagado ordenado: la base de datos puede quedar en un estado de apagado "sucio". PostgreSQL generalmente se recupera solo gracias a su registro de escritura (WAL), pero un <strong>UPS (batería de respaldo/no-break)</strong> básico reduce ese riesgo de dos formas — evita el corte físico durante apagones cortos (el servidor ni se entera), y en apagones largos da tiempo de ejecutar un <code>docker compose down</code> ordenado antes de que se agote la batería. No hace falta un equipo costoso: alcanza con uno que sostenga el servidor durante la duración típica de los cortes que ya conocen en la clínica (por ejemplo, 10–15 minutos como punto de partida).</p>
+<p>Si a pesar de estas medidas ocurre una corrupción de datos, consulte el <strong>Manual de Respaldo</strong> para el procedimiento de restauración — no se repite aquí para evitar que ambos documentos queden desactualizados entre sí.</p>
+</section>
+<section id="12-respaldos">
+<h2>12. Respaldos</h2>
 <p>El respaldo y la restauración de datos tienen su propio documento completo: consulte el <strong>Manual de Respaldo</strong> (<code>manual-respaldo.html</code>). No se repite aquí para evitar que ambos documentos queden desactualizados entre sí.</p>
 </section>
-<section id="12-solución-de-problemas">
-<h2>12. Solución de problemas</h2>
+<section id="13-solución-de-problemas">
+<h2>13. Solución de problemas</h2>
 <p><strong>Un puerto ya está en uso / el sistema no arranca.</strong></p>
 <ul><li>Windows: <code>Get-NetTCPConnection -LocalPort 443</code></li><li>Linux: <code>sudo ss -tulpn | grep :443</code></li></ul>
 <p>Es probable que otro programa esté usando ese puerto. Deténgalo, o cambie el puerto que usa este sistema (consulte a su desarrollador).</p>
@@ -378,8 +442,8 @@ docker exec mc_backend python manage.py import_ars_service_prices --file /app/ap
 <p><strong>La IP del servidor cambió y ya nada carga.</strong> Actualice <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> en <code>.env</code> con la nueva dirección (Capítulo 7), luego:</p>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate backend frontend</code></pre>
 </section>
-<section id="13-anexo-referencia-completa-de-env">
-<h2>13. Anexo — referencia completa de <code>.env</code></h2>
+<section id="14-anexo-referencia-completa-de-env">
+<h2>14. Anexo — referencia completa de <code>.env</code></h2>
 <div class="table-wrap"><table>
 <tr><th>Variable</th><th>¿Secreta?</th><th>Propósito</th></tr>
 <tr><td><code>DJANGO_SECRET_KEY</code></td><td>Sí</td><td>Clave criptográfica del backend.</td></tr>

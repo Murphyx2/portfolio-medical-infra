@@ -73,7 +73,7 @@ Windows Server normalmente **no trae Docker Desktop** (esa versión con interfaz
    docker compose version
    ```
 
-> (NOTE) En Windows Server, el firewall puede mostrar el perfil de red como **Dominio** en vez de **Privado** si el servidor está unido a un dominio de Active Directory — revise cuál perfil aplica antes de crear las reglas del Capítulo 7, y use ese perfil (nunca "Público" ni "Cualquiera").
+> (NOTE) En Windows Server, el firewall puede mostrar el perfil de red como **Dominio** en vez de **Privado** si el servidor está unido a un dominio de Active Directory — revise cuál perfil aplica antes de crear las reglas del Capítulo 9, y use ese perfil (nunca "Público" ni "Cualquiera").
 
 ### Linux (Ubuntu / Debian y similares)
 
@@ -186,7 +186,7 @@ DJANGO_CORS_ALLOWED_ORIGINS=https://192.168.1.42
 
 ### Reservar la IP del servidor (evitar que cambie)
 
-Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y **puede cambiarla** después de un reinicio del router o de un corte eléctrico. Si eso ocurre, `DJANGO_ALLOWED_HOSTS` y `DJANGO_CORS_ALLOWED_ORIGINS` quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 11). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.
+Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y **puede cambiarla** después de un reinicio del router o de un corte eléctrico. Si eso ocurre, `DJANGO_ALLOWED_HOSTS` y `DJANGO_CORS_ALLOWED_ORIGINS` quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 13). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.
 
 **Método 1 — Reserva DHCP en el módem/router (recomendado)**
 
@@ -345,11 +345,84 @@ docker exec mc_backend python manage.py import_ars_service_prices --file /app/ap
 
 > (NOTE) Estos dos comandos son una solución de transición. Es probable que en una futura versión del sistema se reemplacen por una **carga masiva por archivo CSV** directamente desde la página Gestionar precios (sin pasar por la terminal) — si esa función ya existe cuando usted lea esto, prefiérala en lugar de estos comandos.
 
-## 11. Respaldos
+## 11. Cortes de energía y arranque automático
+
+Este sistema se instala pensando en clínicas donde los cortes de electricidad son frecuentes. Hay dos preguntas separadas que resolver, y solo una de ellas viene resuelta de fábrica:
+
+1. **¿Los contenedores vuelven a arrancar solos una vez que Docker está corriendo?** Sí — cada pieza del sistema (`docker-compose.yml`) tiene configurada la política `restart: unless-stopped`, así que en cuanto Docker vuelve a funcionar, todos los contenedores se reinician automáticamente sin que nadie ejecute ningún comando.
+2. **¿Docker mismo vuelve a arrancar solo, sin que nadie inicie sesión en la computadora?** No, no por defecto en Windows 10/11 con Docker Desktop. Docker Desktop es un programa de escritorio — después de un corte de luz, Windows se queda esperando en la pantalla de inicio de sesión y nada arranca hasta que alguien entre físicamente con su contraseña. Esta sección resuelve ese segundo problema.
+
+### Paso 1 — Configurar el BIOS/UEFI para que la PC se encienda sola tras un corte
+
+Por defecto, muchas computadoras se quedan **apagadas** cuando vuelve la luz después de un corte, en vez de encenderse solas. Corríjalo una sola vez:
+
+1. Reinicie la computadora y entre al BIOS/UEFI (usualmente presionando `F2`, `Del` o `F10` al encender — varía por fabricante).
+2. Busque la sección de administración de energía (**Power Management**, **APM Configuration** o similar).
+3. Busque la opción **"Restore on AC/Power Loss"**, **"After Power Loss"** o **"AC Power Recovery"**, y cámbiela a **"Power On"** (encender) — no "Power Off" ni "Last State" si su equipo lo permite, ya que "Last State" no enciende si la PC estaba apagada en el momento exacto del corte.
+4. Guarde los cambios y salga (usualmente `F10`).
+
+### Paso 2 — Arranque de Docker sin iniciar sesión (método recomendado): Docker Engine dentro de WSL2
+
+Docker Desktop por sí solo no resuelve el arranque desatendido, porque es un programa que necesita una sesión de usuario abierta para funcionar. La forma más segura de evitar esto **no es** dejar la sesión de Windows abierta automáticamente — es dejar de depender de Docker Desktop y correr **Docker Engine** (el motor real, sin interfaz gráfica) dentro de WSL2, arrancado por el propio Windows como una tarea programada que no necesita ninguna sesión interactiva:
+
+1. Si WSL2 y una distribución Linux (por ejemplo Ubuntu) no están instaladas todavía, instálelas:
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+2. Habilite `systemd` dentro de esa distribución — abra una terminal de Ubuntu (WSL) y edite `/etc/wsl.conf`:
+   ```bash
+   sudo tee /etc/wsl.conf <<'EOF'
+   [boot]
+   systemd=true
+   EOF
+   ```
+   Luego, desde PowerShell, reinicie WSL para que tome efecto:
+   ```powershell
+   wsl --shutdown
+   ```
+3. Instale Docker Engine dentro de la distribución con el mismo script oficial ya usado en la sección de Linux de este manual:
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   sudo usermod -aG docker $USER
+   ```
+4. Active el arranque automático del motor con la propia distribución:
+   ```bash
+   sudo systemctl enable docker
+   ```
+5. En Windows, abra el **Programador de tareas** (Task Scheduler) y cree una tarea nueva:
+   - **Desencadenador:** Al iniciar el sistema ("At startup").
+   - **Acción:** Iniciar un programa → `wsl.exe` con el argumento `-d Ubuntu` (o el nombre de su distribución).
+   - Marque **"Ejecutar tanto si el usuario inició sesión como si no"** ("Run whether user is logged on or not").
+   - Marque **"Ejecutar con los privilegios más altos"** ("Run with highest privileges").
+   - Al guardar, Windows le pedirá la contraseña de la cuenta una sola vez — la guarda cifrada en su Administrador de credenciales (Credential Manager), no en texto plano.
+6. A partir de aquí, los comandos `docker` / `docker compose` de este manual se ejecutan desde una terminal de WSL (Ubuntu), o anteponiendo `wsl` a los comandos desde PowerShell.
+
+> (NOTE) Este es exactamente el mismo principio que ya usa la instalación en **Windows Server** (sección 3): un motor de contenedores corriendo en segundo plano como servicio, sin necesitar ninguna sesión de escritorio abierta. WSL2 simplemente trae ese mismo patrón a Windows 10/11.
+
+> (TIP) Con esto configurado, Docker Desktop puede quedarse instalado sin problema (ya no hace falta abrirlo) o desinstalarse — ya no es lo que mantiene los contenedores corriendo.
+
+### Alternativa más simple, pero menos segura: inicio de sesión automático de Windows
+
+Use esta alternativa **solo** si configurar WSL2 no es viable de inmediato. Es más simple, pero tiene una debilidad real de seguridad que hay que aceptar conscientemente.
+
+> (WARN) Activar el inicio de sesión automático de Windows significa que cualquier persona con acceso físico a la computadora encuentra una sesión ya abierta, sin que se le pida contraseña. Solo es aceptable si el servidor está en un cuarto o clóset con acceso físico controlado (con llave, o restringido al personal de TI). Use una cuenta local **sin privilegios de administrador**, dedicada solo a esto — nunca la cuenta de administrador que se usa para gestionar el servidor.
+
+1. Cree una cuenta local dedicada, sin privilegios de administrador.
+2. Ejecute `netplwiz`, desmarque **"Los usuarios deben escribir su nombre y contraseña..."** para esa cuenta, y confirme la contraseña.
+   - Alternativa algo más segura: la herramienta **Autologon** de Sysinternals (Microsoft) guarda la contraseña cifrada mediante el almacén LSA de Windows, en vez del valor `DefaultPassword` en texto plano que usa el método del registro — prefiérala si de todas formas va a usar inicio de sesión automático.
+3. En Docker Desktop, active la opción **"Start Docker Desktop when you log in"** (Configuración → General).
+
+### UPS (batería de respaldo) — reducir el riesgo de corrupción de datos
+
+Un corte de luz abrupto no es lo mismo que un apagado ordenado: la base de datos puede quedar en un estado de apagado "sucio". PostgreSQL generalmente se recupera solo gracias a su registro de escritura (WAL), pero un **UPS (batería de respaldo/no-break)** básico reduce ese riesgo de dos formas — evita el corte físico durante apagones cortos (el servidor ni se entera), y en apagones largos da tiempo de ejecutar un `docker compose down` ordenado antes de que se agote la batería. No hace falta un equipo costoso: alcanza con uno que sostenga el servidor durante la duración típica de los cortes que ya conocen en la clínica (por ejemplo, 10–15 minutos como punto de partida).
+
+Si a pesar de estas medidas ocurre una corrupción de datos, consulte el **Manual de Respaldo** para el procedimiento de restauración — no se repite aquí para evitar que ambos documentos queden desactualizados entre sí.
+
+## 12. Respaldos
 
 El respaldo y la restauración de datos tienen su propio documento completo: consulte el **Manual de Respaldo** (`manual-respaldo.html`). No se repite aquí para evitar que ambos documentos queden desactualizados entre sí.
 
-## 12. Solución de problemas
+## 13. Solución de problemas
 
 **Un puerto ya está en uso / el sistema no arranca.**
 - Windows: `Get-NetTCPConnection -LocalPort 443`
@@ -361,13 +434,13 @@ Es probable que otro programa esté usando ese puerto. Deténgalo, o cambie el p
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f <nombre-del-servicio>
 ```
-Lea las últimas líneas del registro. La causa más común en el primer arranque es la carrera del certificado descrita en el Capítulo 7 — vuelva a ejecutar `up -d`.
+Lea las últimas líneas del registro. La causa más común en el primer arranque es la carrera del certificado descrita en el Capítulo 8 — vuelva a ejecutar `up -d`.
 
 **El navegador muestra una advertencia de certificado.**
-Es esperado — vea el Capítulo 7. No es una señal de problema.
+Es esperado — vea el Capítulo 8. No es una señal de problema.
 
 **Se olvidó la contraseña de administrador.**
-Cree una nueva cuenta de administrador con el mismo comando del Capítulo 7 usando otro nombre de usuario, o pida a su desarrollador que restablezca la contraseña de la cuenta existente.
+Cree una nueva cuenta de administrador con el mismo comando del Capítulo 8 usando otro nombre de usuario, o pida a su desarrollador que restablezca la contraseña de la cuenta existente.
 
 **Cambió `PII_FIELD_KEY` por accidente y ahora no puede leer los datos de pacientes.**
 No entre en pánico ni reinicie el sistema repetidamente. Ponga de vuelta la clave **anterior** en `.env` de inmediato para que el sistema pueda volver a leer los datos existentes, y luego pida a su desarrollador que ejecute la rotación correcta de la clave:
@@ -381,7 +454,7 @@ Actualice `DJANGO_ALLOWED_HOSTS` y `DJANGO_CORS_ALLOWED_ORIGINS` en `.env` con l
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate backend frontend
 ```
 
-## 13. Anexo — referencia completa de `.env`
+## 14. Anexo — referencia completa de `.env`
 
 | Variable | ¿Secreta? | Propósito |
 |---|---|---|
