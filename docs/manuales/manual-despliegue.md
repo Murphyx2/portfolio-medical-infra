@@ -303,6 +303,32 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 > (NOTE) Los cambios en ajustes del día a día (reglas de bloqueo de sesión, duración de sesiones, tamaño máximo de archivos, etc.) normalmente **no** requieren tocar Docker — un administrador puede cambiarlos directamente desde la página de Configuración dentro del sistema.
 
+### Actualizar el catálogo de precios de Servicios (tarifario y precios por ARS)
+
+Cuando el tarifario oficial de INCAF cambie, o se deba cargar/actualizar el precio de un Servicio por ARS o por ARS + Programa, un desarrollador puede usar dos comandos del backend en lugar de editarlos uno por uno desde la página de Servicios / Gestionar precios. Ambos comandos son seguros de ejecutar varias veces (no duplican datos) y soportan `--dry-run` para previsualizar los cambios sin guardarlos:
+
+```bash
+# 1. Copiar el archivo Excel del tarifario dentro del contenedor
+docker cp "TARIFARIO INCAF, COD SIMON.xlsx" mc_backend:/tmp/tarifario.xlsx
+
+# 2. Previsualizar los cambios (no escribe nada todavía)
+docker exec mc_backend python manage.py import_tarifario --file /tmp/tarifario.xlsx --dry-run
+
+# 3. Aplicar los cambios de verdad
+docker exec mc_backend python manage.py import_tarifario --file /tmp/tarifario.xlsx
+```
+
+Este comando actualiza el precio **Privado** de los servicios que ya existen (por nombre) y crea los que falten en el catálogo. El **Co-pago** por defecto y el tipo de servicio de una fila ya existente nunca se tocan.
+
+Para cargar precios específicos por ARS o por ARS + Programa (lo que se ve en la página **Gestionar precios**), se usa un segundo comando con un archivo de datos en formato JSON (ver ejemplos en `backend/apps/services/management/data/`):
+
+```bash
+docker exec mc_backend python manage.py import_ars_service_prices --file /app/apps/services/management/data/<archivo>.json --dry-run
+docker exec mc_backend python manage.py import_ars_service_prices --file /app/apps/services/management/data/<archivo>.json
+```
+
+> (NOTE) Estos dos comandos son una solución de transición. Es probable que en una futura versión del sistema se reemplacen por una **carga masiva por archivo CSV** directamente desde la página Gestionar precios (sin pasar por la terminal) — si esa función ya existe cuando usted lea esto, prefiérala en lugar de estos comandos.
+
 ## 10. Respaldos
 
 El respaldo y la restauración de datos tienen su propio documento completo: consulte el **Manual de Respaldo** (`manual-respaldo.html`). No se repite aquí para evitar que ambos documentos queden desactualizados entre sí.
