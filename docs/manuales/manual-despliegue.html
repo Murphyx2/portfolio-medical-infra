@@ -130,17 +130,18 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
   <div class="toc-kind">Manual de Despliegue</div>
   <h2>Contenido</h2>
   <ol><li><a href="#1-alcance-qué-es-y-qué-no-es-este-despliegue">1. Alcance: qué es y qué NO es este despliegue</a></li>
-<li><a href="#2-instalación-de-docker-según-el-sistema-operativo">2. Instalación de Docker según el sistema operativo</a></li>
-<li><a href="#3-qué-hacer-si-docker-no-está-disponible">3. Qué hacer si Docker no está disponible</a></li>
-<li><a href="#4-comandos-docker-esenciales-referencia-rápida">4. Comandos Docker esenciales (referencia rápida)</a></li>
-<li><a href="#5-configuración-del-archivo-env">5. Configuración del archivo <code>.env</code></a></li>
-<li><a href="#6-encontrar-la-dirección-ip-del-servidor">6. Encontrar la dirección IP del servidor</a></li>
-<li><a href="#7-primer-despliegue">7. Primer despliegue</a></li>
-<li><a href="#8-capítulo-de-red-y-seguridad">8. Capítulo de Red y Seguridad</a></li>
-<li><a href="#9-operación-día-a-día">9. Operación día a día</a></li>
-<li><a href="#10-respaldos">10. Respaldos</a></li>
-<li><a href="#11-solución-de-problemas">11. Solución de problemas</a></li>
-<li><a href="#12-anexo-referencia-completa-de-env">12. Anexo — referencia completa de <code>.env</code></a></li></ol>
+<li><a href="#2-requisitos-mínimos-de-hardware">2. Requisitos mínimos de hardware</a></li>
+<li><a href="#3-instalación-de-docker-según-el-sistema-operativo">3. Instalación de Docker según el sistema operativo</a></li>
+<li><a href="#4-qué-hacer-si-docker-no-está-disponible">4. Qué hacer si Docker no está disponible</a></li>
+<li><a href="#5-comandos-docker-esenciales-referencia-rápida">5. Comandos Docker esenciales (referencia rápida)</a></li>
+<li><a href="#6-configuración-del-archivo-env">6. Configuración del archivo <code>.env</code></a></li>
+<li><a href="#7-encontrar-la-dirección-ip-del-servidor">7. Encontrar la dirección IP del servidor</a></li>
+<li><a href="#8-primer-despliegue">8. Primer despliegue</a></li>
+<li><a href="#9-capítulo-de-red-y-seguridad">9. Capítulo de Red y Seguridad</a></li>
+<li><a href="#10-operación-día-a-día">10. Operación día a día</a></li>
+<li><a href="#11-respaldos">11. Respaldos</a></li>
+<li><a href="#12-solución-de-problemas">12. Solución de problemas</a></li>
+<li><a href="#13-anexo-referencia-completa-de-env">13. Anexo — referencia completa de <code>.env</code></a></li></ol>
 </nav>
 <main>
   <div class="doc-header">
@@ -160,8 +161,22 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 └── infra/        &lt;- todos los comandos de este manual se ejecutan desde aquí</code></pre>
 <div class="callout tip"><span class="callout-label">Recomendación</span><p>Cada comando de este manual está listo para copiar y pegar tal cual, excepto donde aparece algo entre <code>&lt;corchetes angulares&gt;</code> — eso hay que reemplazarlo por su propio valor (por ejemplo, la contraseña o la dirección IP del servidor).</p></div>
 </section>
-<section id="2-instalación-de-docker-según-el-sistema-operativo">
-<h2>2. Instalación de Docker según el sistema operativo</h2>
+<section id="2-requisitos-mínimos-de-hardware">
+<h2>2. Requisitos mínimos de hardware</h2>
+<p>Estos son los requisitos recomendados para la computadora que hará de <strong>servidor</strong>, pensados para un consultorio o clínica pequeña con hasta unas <strong>10 computadoras conectadas</strong> a la vez. La aplicación en sí es liviana (no hace cálculos pesados); lo importante es que el servidor tenga suficiente memoria y espacio en disco para la base de datos, las imágenes de expedientes y los respaldos.</p>
+<div class="table-wrap"><table>
+<tr><th>Recurso</th><th>Mínimo</th><th>Recomendado</th></tr>
+<tr><td>CPU</td><td>2 núcleos</td><td>4 núcleos</td></tr>
+<tr><td>Memoria RAM</td><td>4 GB</td><td>8 GB</td></tr>
+<tr><td>Disco</td><td>20 GB libres</td><td>40 GB o más libres (crece con el tiempo por imágenes y respaldos)</td></tr>
+<tr><td>Sistema operativo</td><td colspan="2">Windows 10, Windows 11, Windows Server, o Linux, con soporte para Docker Compose</td></tr>
+<tr><td>Red</td><td colspan="2">Cableada o Wi-Fi estable, en la misma red local que las 10 computadoras clientes</td></tr>
+</table></div>
+<div class="callout note"><span class="callout-label">Nota</span><p>Los "4 GB de espacio libre en disco" mencionados en la sección anterior son solo para la instalación inicial (imágenes de Docker, dependencias). El disco recomendado en esta tabla (20–40 GB) es para operación normal a mediano plazo: base de datos, imágenes de expedientes médicos subidas por el personal, y respaldos.</p></div>
+<div class="callout tip"><span class="callout-label">Recomendación</span><p>Estos números son una guía conservadora, no un límite estricto del sistema — la aplicación reparte el trabajo en varios contenedores Docker (base de datos, backend, caché, sitio web) y cada uno tiene un tope de uso de CPU/memoria configurado en <code>docker-compose.prod.yml</code>, para que ninguno acapare todos los recursos del servidor. Con 10 computadoras conectadas, el uso real normalmente queda muy por debajo de estos mínimos; se recomiendan como margen de seguridad, no porque el sistema los consuma todos.</p></div>
+</section>
+<section id="3-instalación-de-docker-según-el-sistema-operativo">
+<h2>3. Instalación de Docker según el sistema operativo</h2>
 <p>La aplicación corre dentro de <strong>Docker</strong>, una herramienta que empaqueta la base de datos, el backend y el sitio web en piezas aisladas ("contenedores") para no tener que instalar cada programa a mano. Elija su sistema operativo:</p>
 <h3>Windows 10 / Windows 11</h3>
 <ol><li>Descargue <strong>Docker Desktop</strong> desde docker.com (o pida a la persona encargada de TI que lo instale).</li><li>Ejecute el instalador. Cuando pregunte por el "backend", deje marcada la opción <strong>WSL 2</strong> (viene así por defecto).</li><li>Reinicie la computadora si el instalador lo pide.</li><li>Abra Docker Desktop una vez — debe quedar corriendo en segundo plano (ícono de la ballena en la barra de tareas) para que los pasos siguientes funcionen.</li><li>Abra PowerShell y confirme la instalación:</li></ol>
@@ -176,7 +191,7 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 <ol><li>Instale Docker Engine (no Desktop) siguiendo la guía oficial de Microsoft/Docker para Windows Server, o pida a TI que lo haga con el paquete <code>mirantis/docker</code> o <code>docker-ce</code> correspondiente a la versión del servidor.</li><li>Confirme igual que en Windows 10/11:</li></ol>
 <pre><code>   docker --version
    docker compose version</code></pre>
-<div class="callout note"><span class="callout-label">Nota</span><p>En Windows Server, el firewall puede mostrar el perfil de red como <strong>Dominio</strong> en vez de <strong>Privado</strong> si el servidor está unido a un dominio de Active Directory — revise cuál perfil aplica antes de crear las reglas del Capítulo 7, y use ese perfil (nunca "Público" ni "Cualquiera").</p></div>
+<div class="callout note"><span class="callout-label">Nota</span><p>En Windows Server, el firewall puede mostrar el perfil de red como <strong>Dominio</strong> en vez de <strong>Privado</strong> si el servidor está unido a un dominio de Active Directory — revise cuál perfil aplica antes de crear las reglas del Capítulo 8, y use ese perfil (nunca "Público" ni "Cualquiera").</p></div>
 <h3>Linux (Ubuntu / Debian y similares)</h3>
 <ol><li>Ejecute el script oficial de instalación:</li></ol>
 <pre><code>   curl -fsSL https://get.docker.com | sh</code></pre>
@@ -189,8 +204,8 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
    docker compose version</code></pre>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Este manual siempre usa <strong><code>docker compose</code></strong> (dos palabras, con espacio) — el plugin moderno. Nunca use la herramienta antigua <code>docker-compose</code> (una palabra, con guión); si es la única que tiene instalada, instale el plugin nuevo en su lugar.</p></div>
 </section>
-<section id="3-qué-hacer-si-docker-no-está-disponible">
-<h2>3. Qué hacer si Docker no está disponible</h2>
+<section id="4-qué-hacer-si-docker-no-está-disponible">
+<h2>4. Qué hacer si Docker no está disponible</h2>
 <p>A veces Docker no se puede instalar de inmediato. Antes de rendirse, pruebe en este orden:</p>
 <ol><li><strong>La virtualización está deshabilitada en el BIOS/UEFI.</strong> Docker en Windows necesita virtualización de hardware activada. Reinicie, entre al BIOS (usualmente <code>F2</code>, <code>Del</code> o <code>F10</code> al encender) y active <strong>Intel VT-x</strong> o <strong>AMD-V</strong> / "Virtualization Technology". Guarde y reinicie.</li><li><strong>Windows Home sin WSL 2.</strong> Docker Desktop en Windows Home requiere WSL 2. Instálelo con:</li></ol>
 <pre><code>   wsl --install</code></pre>
@@ -198,8 +213,8 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 <ol><li><strong>La política de la empresa bloquea Docker Desktop</strong> (licenciamiento corporativo, restricciones de TI). Use en su lugar una alternativa compatible con los mismos comandos:</li><li><strong>Docker Engine sin interfaz gráfica</strong> (línea de comandos solamente) — funciona igual para todo este manual, ya que nunca se usa la interfaz de Docker Desktop, solo la terminal.</li><li><strong>Podman Desktop</strong> — alternativa gratuita compatible con <code>docker compose</code>; los comandos de este manual funcionan igual reemplazando <code>docker</code> por <code>podman</code> si así lo indica su instalación.</li><li><strong>Sigue sin funcionar.</strong> Escale a la persona encargada de TI o del servidor con esta información exacta: *"Necesito un motor de contenedores compatible con Docker Compose, con los puertos 443 y 80 libres en el servidor, y al menos 4 GB de espacio en disco."*</li></ol>
 <div class="callout note"><span class="callout-label">Nota</span><p>Este capítulo no reemplaza a Docker por una instalación manual de Python, Node.js, PostgreSQL, Redis y un servidor web por separado — esa ruta existe en teoría, pero es un proyecto de infraestructura mucho más grande y no está cubierta por este manual. El objetivo aquí es conseguir que Docker (o un reemplazo compatible) funcione.</p></div>
 </section>
-<section id="4-comandos-docker-esenciales-referencia-rápida">
-<h2>4. Comandos Docker esenciales (referencia rápida)</h2>
+<section id="5-comandos-docker-esenciales-referencia-rápida">
+<h2>5. Comandos Docker esenciales (referencia rápida)</h2>
 <p>Todos se ejecutan desde la carpeta <code>infra/</code>. Para producción siempre se usan <strong>ambos</strong> archivos de configuración encadenados con <code>-f</code>.</p>
 <div class="table-wrap"><table>
 <tr><th>Comando</th><th>Qué hace</th><th>Cuándo usarlo</th></tr>
@@ -212,8 +227,8 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 </table></div>
 <div class="callout danger"><span class="callout-label">Peligro</span><p>El comando <code>down -v</code> (con <code>-v</code> al final) <strong>borra permanentemente</strong> la base de datos y todos los archivos subidos. Nunca lo ejecute en un servidor con datos reales, a menos que tenga un respaldo reciente y la intención deliberada de borrar todo. Vea el <strong>Manual de Respaldo</strong> antes de usar cualquier variante de <code>down</code> con <code>-v</code>.</p></div>
 </section>
-<section id="5-configuración-del-archivo-env">
-<h2>5. Configuración del archivo <code>.env</code></h2>
+<section id="6-configuración-del-archivo-env">
+<h2>6. Configuración del archivo <code>.env</code></h2>
 <p>La aplicación lee sus contraseñas y ajustes desde un archivo llamado <code>.env</code> dentro de <code>infra/</code>. Este archivo nunca se comparte ni se sube a un repositorio — cada servidor tiene su propia copia con sus propios valores.</p>
 <ol><li>Copie la plantilla:</li><li><strong>Windows:</strong> <code>copy .env.example .env</code></li><li><strong>Linux:</strong> <code>cp .env.example .env</code></li><li>Abra <code>.env</code> con un editor de texto y complete estos valores (el resto puede quedar con su valor por defecto):</li></ol>
 <div class="table-wrap"><table>
@@ -222,7 +237,7 @@ footer{color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--borde
 <tr><td><code>POSTGRES_PASSWORD</code></td><td>Contraseña de la base de datos. <strong>Secreta.</strong></td></tr>
 <tr><td><code>REDIS_PASSWORD</code></td><td>Contraseña de la caché (obligatoria en producción). <strong>Secreta.</strong></td></tr>
 <tr><td><code>PII_FIELD_KEY</code></td><td>Clave que cifra los datos personales de los pacientes en la base de datos. <strong>Secreta — lea la advertencia abajo.</strong></td></tr>
-<tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td>Direcciones que el backend acepta — agregue la IP del servidor (Capítulo 6).</td></tr>
+<tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td>Direcciones que el backend acepta — agregue la IP del servidor (Capítulo 7).</td></tr>
 <tr><td><code>DJANGO_CORS_ALLOWED_ORIGINS</code></td><td>Origen web autorizado a llamar la API — <code>https://&lt;IP-del-servidor&gt;</code>.</td></tr>
 <tr><td><code>TZ</code></td><td>Zona horaria, use <code>America/Santo_Domingo</code>.</td></tr>
 </table></div>
@@ -233,8 +248,8 @@ docker run --rm python:3.13-alpine sh -c "pip install -q cryptography &amp;&amp;
 <div class="callout danger"><span class="callout-label">Peligro</span><p>Una vez que el sistema tenga pacientes reales guardados, <strong><code>PII_FIELD_KEY</code> nunca debe cambiarse.</strong> Cambiarla vuelve ilegible para siempre cada registro de paciente existente — no hay forma de recuperar esos datos después sin la clave original. Configúrela una sola vez, correctamente, antes de poner el sistema en uso real, y guarde una copia segura del archivo <code>.env</code> completo (vea el Manual de Respaldo). Si alguna vez es realmente necesario rotarla, eso requiere el comando especial <code>reencrypt_pii</code> — nunca editar el archivo directamente.</p></div>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Nunca suba <code>.env</code> a un repositorio de código, lo envíe por correo, ni lo guarde fuera del servidor y un respaldo seguro. Contiene todas las contraseñas y claves de cifrado del sistema.</p></div>
 </section>
-<section id="6-encontrar-la-dirección-ip-del-servidor">
-<h2>6. Encontrar la dirección IP del servidor</h2>
+<section id="7-encontrar-la-dirección-ip-del-servidor">
+<h2>7. Encontrar la dirección IP del servidor</h2>
 <span class="os-tag os-windows">Windows</span>
 <pre><code>ipconfig</code></pre>
 <p>Busque <code>Dirección IPv4</code> bajo el adaptador de red activo (Wi-Fi o Ethernet), por ejemplo <code>192.168.1.42</code>.</p>
@@ -246,7 +261,7 @@ docker run --rm python:3.13-alpine sh -c "pip install -q cryptography &amp;&amp;
 DJANGO_CORS_ALLOWED_ORIGINS=https://192.168.1.42</code></pre>
 <div class="callout tip"><span class="callout-label">Recomendación</span><p>Pida a quien administre la red que <strong>reserve</strong> esa dirección IP para el servidor (una "reserva DHCP" o "IP estática"), para que no cambie después de un reinicio del router.</p></div>
 <h3>Reservar la IP del servidor (evitar que cambie)</h3>
-<p>Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y <strong>puede cambiarla</strong> después de un reinicio del router o de un corte eléctrico. Si eso ocurre, <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 11). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.</p>
+<p>Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), y <strong>puede cambiarla</strong> después de un reinicio del router o de un corte eléctrico. Si eso ocurre, <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> quedan desactualizados y el sitio deja de cargar (vea "La IP del servidor cambió" en el Capítulo 12). Por eso, antes de continuar, reserve la IP con uno de estos dos métodos.</p>
 <p><strong>Método 1 — Reserva DHCP en el módem/router (recomendado)</strong></p>
 <ol>
 <li>Primero anote la <strong>dirección MAC</strong> del servidor (el identificador único de su tarjeta de red):
@@ -257,7 +272,7 @@ DJANGO_CORS_ALLOWED_ORIGINS=https://192.168.1.42</code></pre>
 <pre><code>ip link</code></pre>
 <p>Busque <code>link/ether</code> bajo la interfaz activa, con formato <code>xx:xx:xx:xx:xx:xx</code>.</p>
 </li>
-<li>Entre al panel de administración del módem con la misma URL y credenciales del Capítulo 8 (<code>http://192.168.1.1</code> o <code>http://192.168.0.1</code>, usuario/contraseña en la etiqueta del equipo).</li>
+<li>Entre al panel de administración del módem con la misma URL y credenciales del Capítulo 9 (<code>http://192.168.1.1</code> o <code>http://192.168.0.1</code>, usuario/contraseña en la etiqueta del equipo).</li>
 <li>Busque la sección de <strong>DHCP</strong> — el nombre exacto varía por proveedor y modelo: "Reserva de IP", "Address Reservation", "Static DHCP Lease", "DHCP Binding". Si no la encuentra con ninguno de estos nombres, contacte al soporte técnico de Claro o Altice para que lo guíen en su equipo específico.</li>
 <li>Ubique el servidor en la lista de dispositivos conectados por su dirección MAC (paso 1) y <strong>reserve</strong> la IP que ya tiene (la misma que anotó en la sección anterior). Guarde los cambios.</li>
 </ol>
@@ -275,8 +290,8 @@ nmcli con up "&lt;nombre-de-la-conexión&gt;"</code></pre>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>La IP que elija debe quedar <strong>fuera</strong> del rango que el router reparte por DHCP (revíselo en la misma sección de DHCP del panel del router), o puede chocar con la IP de otro dispositivo cuando el router se la asigne a alguien más.</p></div>
 <p>Después de aplicar cualquiera de los dos métodos, confirme que la IP no cambió (<code>ipconfig</code> en Windows / <code>hostname -I</code> en Linux) y que coincide con la que ya tiene escrita en <code>.env</code>.</p>
 </section>
-<section id="7-primer-despliegue">
-<h2>7. Primer despliegue</h2>
+<section id="8-primer-despliegue">
+<h2>8. Primer despliegue</h2>
 <p>Desde la carpeta <code>infra/</code>:</p>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build</code></pre>
 <p>Este único comando descarga y construye todo, genera un certificado HTTPS propio automáticamente, prepara la base de datos, y arranca las cinco piezas del sistema en segundo plano. La primera vez puede tardar varios minutos.</p>
@@ -288,8 +303,8 @@ nmcli con up "&lt;nombre-de-la-conexión&gt;"</code></pre>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py create_admin --username admin --email admin@clinica.com --password "&lt;contraseña-propia&gt;"</code></pre>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Reemplace el usuario, el correo y especialmente la contraseña por valores propios — nunca deje la contraseña de ejemplo en un sistema real.</p></div>
 </section>
-<section id="8-capítulo-de-red-y-seguridad">
-<h2>8. Capítulo de Red y Seguridad</h2>
+<section id="9-capítulo-de-red-y-seguridad">
+<h2>9. Capítulo de Red y Seguridad</h2>
 <p>Este es el capítulo más importante para proteger el sistema: <strong>el objetivo es que la aplicación sea alcanzable solo dentro de la red de la clínica, y completamente invisible desde internet.</strong></p>
 <h3>Firewall del servidor (Windows y Linux)</h3>
 <span class="os-tag os-windows">Windows (10, 11 y Server — mismo comando en los tres)</span>
@@ -306,14 +321,14 @@ sudo ufw allow 80/tcp</code></pre>
 <div class="callout danger"><span class="callout-label">Peligro</span><p>El perfil del firewall debe ser siempre <strong>Privado</strong> (<code>-Profile Private</code>) — nunca "Público", "Dominio" (salvo que el servidor esté realmente unido a un dominio interno confiable) ni "Cualquiera". Un perfil equivocado aplicaría la misma regla en redes no confiables.</p></div>
 <h3>El módem/router: Claro Dominicana y Altice Dominicana</h3>
 <p>La mayoría de los equipos que Claro Dominicana y Altice Dominicana entregan a sus clientes (residenciales o de negocio) son combinaciones de módem + router ("ONT-router") con un panel de administración web. Los pasos exactos varían según el modelo y la versión del equipo, pero el objetivo siempre es el mismo:</p>
-<ol><li><strong>Ingrese al panel de administración</strong> del módem — normalmente en <code>http://192.168.1.1</code> o <code>http://192.168.0.1</code> desde un navegador conectado a esa red. El usuario y la contraseña por defecto suelen estar impresos en una etiqueta pegada al equipo. Si fueron cambiados y no los tiene, contacte al soporte técnico del proveedor (Claro o Altice).</li><li><strong>Deshabilite UPnP</strong> (Universal Plug and Play) — esta función permite que programas dentro de la red abran puertos hacia internet automáticamente, sin avisar. Para este sistema no se necesita, y es un riesgo de seguridad dejarlo activo.</li><li><strong>Confirme que la DMZ esté deshabilitada</strong> — la DMZ expone una computadora completa directamente a internet; nunca debe apuntar al servidor de este sistema.</li><li><strong>No reenvíe (port-forward) ningún puerto</strong> hacia el servidor — en particular los puertos <strong>80, 443, 8000, 5432 y 6379</strong>. Este sistema no necesita ningún puerto abierto desde internet hacia el servidor bajo ningún escenario cubierto por este manual.</li><li><strong>Reserve una IP fija para el servidor</strong> dentro de la red local, para que las reglas de firewall configuradas arriba no se rompan si la IP cambia — vea el procedimiento paso a paso en la sección <strong>"Reservar la IP del servidor"</strong> del Capítulo 6.</li></ol>
+<ol><li><strong>Ingrese al panel de administración</strong> del módem — normalmente en <code>http://192.168.1.1</code> o <code>http://192.168.0.1</code> desde un navegador conectado a esa red. El usuario y la contraseña por defecto suelen estar impresos en una etiqueta pegada al equipo. Si fueron cambiados y no los tiene, contacte al soporte técnico del proveedor (Claro o Altice).</li><li><strong>Deshabilite UPnP</strong> (Universal Plug and Play) — esta función permite que programas dentro de la red abran puertos hacia internet automáticamente, sin avisar. Para este sistema no se necesita, y es un riesgo de seguridad dejarlo activo.</li><li><strong>Confirme que la DMZ esté deshabilitada</strong> — la DMZ expone una computadora completa directamente a internet; nunca debe apuntar al servidor de este sistema.</li><li><strong>No reenvíe (port-forward) ningún puerto</strong> hacia el servidor — en particular los puertos <strong>80, 443, 8000, 5432 y 6379</strong>. Este sistema no necesita ningún puerto abierto desde internet hacia el servidor bajo ningún escenario cubierto por este manual.</li><li><strong>Reserve una IP fija para el servidor</strong> dentro de la red local, para que las reglas de firewall configuradas arriba no se rompan si la IP cambia — vea el procedimiento paso a paso en la sección <strong>"Reservar la IP del servidor"</strong> del Capítulo 7.</li></ol>
 <div class="callout note"><span class="callout-label">Nota</span><p>Los planes residenciales de Claro y Altice suelen usar <strong>CGNAT</strong> (una capa de traducción de direcciones compartida entre varios clientes), lo que de por sí ya dificulta que alguien desde internet alcance su red doméstica directamente. Esto es una protección adicional útil, <strong>no un sustituto</strong> de configurar bien el equipo — no dependa de ella únicamente.</p></div>
 <div class="callout warn"><span class="callout-label">Qué NO hacer</span><p>Los nombres exactos de los menús varían según el modelo y la versión de firmware del módem entregado por cada proveedor. Si no encuentra alguna de estas opciones con ese nombre exacto, busque un término equivalente ("Port Forwarding", "Virtual Server", "Servidor Virtual", "NAT") o contacte al soporte técnico de Claro o Altice para confirmar cómo verificar que estas funciones estén apagadas en su equipo específico.</p></div>
 <h3>Si se necesita acceso remoto legítimo</h3>
 <p>Si algún médico o administrador necesita entrar al sistema desde fuera de la clínica (otra sede, su casa), la forma correcta es una <strong>VPN</strong> (por ejemplo WireGuard, o un servicio de VPN empresarial que ofrezca el proveedor de internet) — nunca abrir puertos directamente en el router. Una VPN hace que el dispositivo remoto se comporte como si estuviera físicamente dentro de la red de la clínica, sin exponer el servidor a internet en ningún momento. Configurar una VPN es trabajo de un técnico de red y está fuera del alcance de este manual.</p>
 </section>
-<section id="9-operación-día-a-día">
-<h2>9. Operación día a día</h2>
+<section id="10-operación-día-a-día">
+<h2>10. Operación día a día</h2>
 <pre><code># Detener el sistema (los datos se conservan)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 
@@ -344,27 +359,27 @@ docker exec mc_backend python manage.py import_tarifario --file /tmp/tarifario.x
 docker exec mc_backend python manage.py import_ars_service_prices --file /app/apps/services/management/data/&lt;archivo&gt;.json</code></pre>
 <div class="callout note"><span class="callout-label">Nota</span><p>Estos dos comandos son una solución de transición. Es probable que en una futura versión del sistema se reemplacen por una <strong>carga masiva por archivo CSV</strong> directamente desde la página Gestionar precios (sin pasar por la terminal) — si esa función ya existe cuando usted lea esto, prefiérala en lugar de estos comandos.</p></div>
 </section>
-<section id="10-respaldos">
-<h2>10. Respaldos</h2>
+<section id="11-respaldos">
+<h2>11. Respaldos</h2>
 <p>El respaldo y la restauración de datos tienen su propio documento completo: consulte el <strong>Manual de Respaldo</strong> (<code>manual-respaldo.html</code>). No se repite aquí para evitar que ambos documentos queden desactualizados entre sí.</p>
 </section>
-<section id="11-solución-de-problemas">
-<h2>11. Solución de problemas</h2>
+<section id="12-solución-de-problemas">
+<h2>12. Solución de problemas</h2>
 <p><strong>Un puerto ya está en uso / el sistema no arranca.</strong></p>
 <ul><li>Windows: <code>Get-NetTCPConnection -LocalPort 443</code></li><li>Linux: <code>sudo ss -tulpn | grep :443</code></li></ul>
 <p>Es probable que otro programa esté usando ese puerto. Deténgalo, o cambie el puerto que usa este sistema (consulte a su desarrollador).</p>
 <p><strong>Un contenedor se reinicia solo o aparece como "unhealthy".</strong></p>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f &lt;nombre-del-servicio&gt;</code></pre>
-<p>Lea las últimas líneas del registro. La causa más común en el primer arranque es la carrera del certificado descrita en el Capítulo 7 — vuelva a ejecutar <code>up -d</code>.</p>
-<p><strong>El navegador muestra una advertencia de certificado.</strong> Es esperado — vea el Capítulo 7. No es una señal de problema.</p>
-<p><strong>Se olvidó la contraseña de administrador.</strong> Cree una nueva cuenta de administrador con el mismo comando del Capítulo 7 usando otro nombre de usuario, o pida a su desarrollador que restablezca la contraseña de la cuenta existente.</p>
+<p>Lea las últimas líneas del registro. La causa más común en el primer arranque es la carrera del certificado descrita en el Capítulo 8 — vuelva a ejecutar <code>up -d</code>.</p>
+<p><strong>El navegador muestra una advertencia de certificado.</strong> Es esperado — vea el Capítulo 8. No es una señal de problema.</p>
+<p><strong>Se olvidó la contraseña de administrador.</strong> Cree una nueva cuenta de administrador con el mismo comando del Capítulo 8 usando otro nombre de usuario, o pida a su desarrollador que restablezca la contraseña de la cuenta existente.</p>
 <p><strong>Cambió <code>PII_FIELD_KEY</code> por accidente y ahora no puede leer los datos de pacientes.</strong> No entre en pánico ni reinicie el sistema repetidamente. Ponga de vuelta la clave <strong>anterior</strong> en <code>.env</code> de inmediato para que el sistema pueda volver a leer los datos existentes, y luego pida a su desarrollador que ejecute la rotación correcta de la clave:</p>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py reencrypt_pii --old-key &lt;CLAVE_ANTERIOR&gt;</code></pre>
-<p><strong>La IP del servidor cambió y ya nada carga.</strong> Actualice <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> en <code>.env</code> con la nueva dirección (Capítulo 6), luego:</p>
+<p><strong>La IP del servidor cambió y ya nada carga.</strong> Actualice <code>DJANGO_ALLOWED_HOSTS</code> y <code>DJANGO_CORS_ALLOWED_ORIGINS</code> en <code>.env</code> con la nueva dirección (Capítulo 7), luego:</p>
 <pre><code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate backend frontend</code></pre>
 </section>
-<section id="12-anexo-referencia-completa-de-env">
-<h2>12. Anexo — referencia completa de <code>.env</code></h2>
+<section id="13-anexo-referencia-completa-de-env">
+<h2>13. Anexo — referencia completa de <code>.env</code></h2>
 <div class="table-wrap"><table>
 <tr><th>Variable</th><th>¿Secreta?</th><th>Propósito</th></tr>
 <tr><td><code>DJANGO_SECRET_KEY</code></td><td>Sí</td><td>Clave criptográfica del backend.</td></tr>

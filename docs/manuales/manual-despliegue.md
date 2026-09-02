@@ -24,7 +24,23 @@ MedicalConsultations/
 
 > (TIP) Cada comando de este manual está listo para copiar y pegar tal cual, excepto donde aparece algo entre `<corchetes angulares>` — eso hay que reemplazarlo por su propio valor (por ejemplo, la contraseña o la dirección IP del servidor).
 
-## 2. Instalación de Docker según el sistema operativo
+## 2. Requisitos mínimos de hardware
+
+Estos son los requisitos recomendados para la computadora que hará de **servidor**, pensados para un consultorio o clínica pequeña con hasta unas **10 computadoras conectadas** a la vez. La aplicación en sí es liviana (no hace cálculos pesados); lo importante es que el servidor tenga suficiente memoria y espacio en disco para la base de datos, las imágenes de expedientes y los respaldos.
+
+| Recurso | Mínimo | Recomendado |
+|---|---|---|
+| CPU | 2 núcleos | 4 núcleos |
+| Memoria RAM | 4 GB | 8 GB |
+| Disco | 20 GB libres | 40 GB o más libres (crece con el tiempo por imágenes y respaldos) |
+| Sistema operativo | Windows 10, Windows 11, Windows Server, o Linux, con soporte para Docker Compose | — |
+| Red | Cableada o Wi-Fi estable, en la misma red local que las 10 computadoras clientes | — |
+
+> (NOTE) Los "4 GB de espacio libre en disco" mencionados en la sección anterior son solo para la instalación inicial (imágenes de Docker, dependencias). El disco recomendado en esta tabla (20–40 GB) es para operación normal a mediano plazo: base de datos, imágenes de expedientes médicos subidas por el personal, y respaldos.
+
+> (TIP) Estos números son una guía conservadora, no un límite estricto del sistema — la aplicación reparte el trabajo en varios contenedores Docker (base de datos, backend, caché, sitio web) y cada uno tiene un tope de uso de CPU/memoria configurado en `docker-compose.prod.yml`, para que ninguno acapare todos los recursos del servidor. Con 10 computadoras conectadas, el uso real normalmente queda muy por debajo de estos mínimos; se recomiendan como margen de seguridad, no porque el sistema los consuma todos.
+
+## 3. Instalación de Docker según el sistema operativo
 
 La aplicación corre dentro de **Docker**, una herramienta que empaqueta la base de datos, el backend y el sitio web en piezas aisladas ("contenedores") para no tener que instalar cada programa a mano. Elija su sistema operativo:
 
@@ -81,7 +97,7 @@ Windows Server normalmente **no trae Docker Desktop** (esa versión con interfaz
 
 > (WARN) Este manual siempre usa **`docker compose`** (dos palabras, con espacio) — el plugin moderno. Nunca use la herramienta antigua `docker-compose` (una palabra, con guión); si es la única que tiene instalada, instale el plugin nuevo en su lugar.
 
-## 3. Qué hacer si Docker no está disponible
+## 4. Qué hacer si Docker no está disponible
 
 A veces Docker no se puede instalar de inmediato. Antes de rendirse, pruebe en este orden:
 
@@ -98,7 +114,7 @@ A veces Docker no se puede instalar de inmediato. Antes de rendirse, pruebe en e
 
 > (NOTE) Este capítulo no reemplaza a Docker por una instalación manual de Python, Node.js, PostgreSQL, Redis y un servidor web por separado — esa ruta existe en teoría, pero es un proyecto de infraestructura mucho más grande y no está cubierta por este manual. El objetivo aquí es conseguir que Docker (o un reemplazo compatible) funcione.
 
-## 4. Comandos Docker esenciales (referencia rápida)
+## 5. Comandos Docker esenciales (referencia rápida)
 
 Todos se ejecutan desde la carpeta `infra/`. Para producción siempre se usan **ambos** archivos de configuración encadenados con `-f`.
 
@@ -113,7 +129,7 @@ Todos se ejecutan desde la carpeta `infra/`. Para producción siempre se usan **
 
 > (DANGER) El comando `down -v` (con `-v` al final) **borra permanentemente** la base de datos y todos los archivos subidos. Nunca lo ejecute en un servidor con datos reales, a menos que tenga un respaldo reciente y la intención deliberada de borrar todo. Vea el **Manual de Respaldo** antes de usar cualquier variante de `down` con `-v`.
 
-## 5. Configuración del archivo `.env`
+## 6. Configuración del archivo `.env`
 
 La aplicación lee sus contraseñas y ajustes desde un archivo llamado `.env` dentro de `infra/`. Este archivo nunca se comparte ni se sube a un repositorio — cada servidor tiene su propia copia con sus propios valores.
 
@@ -128,7 +144,7 @@ La aplicación lee sus contraseñas y ajustes desde un archivo llamado `.env` de
 | `POSTGRES_PASSWORD` | Contraseña de la base de datos. **Secreta.** |
 | `REDIS_PASSWORD` | Contraseña de la caché (obligatoria en producción). **Secreta.** |
 | `PII_FIELD_KEY` | Clave que cifra los datos personales de los pacientes en la base de datos. **Secreta — lea la advertencia abajo.** |
-| `DJANGO_ALLOWED_HOSTS` | Direcciones que el backend acepta — agregue la IP del servidor (Capítulo 6). |
+| `DJANGO_ALLOWED_HOSTS` | Direcciones que el backend acepta — agregue la IP del servidor (Capítulo 7). |
 | `DJANGO_CORS_ALLOWED_ORIGINS` | Origen web autorizado a llamar la API — `https://<IP-del-servidor>`. |
 | `TZ` | Zona horaria, use `America/Santo_Domingo`. |
 
@@ -145,7 +161,7 @@ El primero sirve para `DJANGO_SECRET_KEY`; el segundo, para `PII_FIELD_KEY`. Par
 
 > (WARN) Nunca suba `.env` a un repositorio de código, lo envíe por correo, ni lo guarde fuera del servidor y un respaldo seguro. Contiene todas las contraseñas y claves de cifrado del sistema.
 
-## 6. Encontrar la dirección IP del servidor
+## 7. Encontrar la dirección IP del servidor
 
 **Windows:**
 ```powershell
@@ -185,7 +201,7 @@ Por defecto, el router le asigna la IP al servidor de forma automática (DHCP), 
      ip link
      ```
      Busque `link/ether` bajo la interfaz activa, con formato `xx:xx:xx:xx:xx:xx`.
-2. Entre al panel de administración del módem con la misma URL y credenciales del Capítulo 8 (`http://192.168.1.1` o `http://192.168.0.1`, usuario/contraseña en la etiqueta del equipo).
+2. Entre al panel de administración del módem con la misma URL y credenciales del Capítulo 9 (`http://192.168.1.1` o `http://192.168.0.1`, usuario/contraseña en la etiqueta del equipo).
 3. Busque la sección de **DHCP** — el nombre exacto varía por proveedor y modelo: "Reserva de IP", "Address Reservation", "Static DHCP Lease", "DHCP Binding". Si no la encuentra con ninguno de estos nombres, contacte al soporte técnico de Claro o Altice para que lo guíen en su equipo específico.
 4. Ubique el servidor en la lista de dispositivos conectados por su dirección MAC (paso 1) y **reserve** la IP que ya tiene (la misma que anotó en la sección anterior). Guarde los cambios.
 
@@ -207,7 +223,7 @@ Use este método solo si no tiene acceso al panel del router (por ejemplo, un ro
 
 Después de aplicar cualquiera de los dos métodos, confirme que la IP no cambió (`ipconfig` en Windows / `hostname -I` en Linux) y que coincide con la que ya tiene escrita en `.env`.
 
-## 7. Primer despliegue
+## 8. Primer despliegue
 
 Desde la carpeta `infra/`:
 
@@ -235,7 +251,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend pyt
 
 > (WARN) Reemplace el usuario, el correo y especialmente la contraseña por valores propios — nunca deje la contraseña de ejemplo en un sistema real.
 
-## 8. Capítulo de Red y Seguridad
+## 9. Capítulo de Red y Seguridad
 
 Este es el capítulo más importante para proteger el sistema: **el objetivo es que la aplicación sea alcanzable solo dentro de la red de la clínica, y completamente invisible desde internet.**
 
@@ -269,7 +285,7 @@ La mayoría de los equipos que Claro Dominicana y Altice Dominicana entregan a s
 2. **Deshabilite UPnP** (Universal Plug and Play) — esta función permite que programas dentro de la red abran puertos hacia internet automáticamente, sin avisar. Para este sistema no se necesita, y es un riesgo de seguridad dejarlo activo.
 3. **Confirme que la DMZ esté deshabilitada** — la DMZ expone una computadora completa directamente a internet; nunca debe apuntar al servidor de este sistema.
 4. **No reenvíe (port-forward) ningún puerto** hacia el servidor — en particular los puertos **80, 443, 8000, 5432 y 6379**. Este sistema no necesita ningún puerto abierto desde internet hacia el servidor bajo ningún escenario cubierto por este manual.
-5. **Reserve una IP fija para el servidor** dentro de la red local, para que las reglas de firewall configuradas arriba no se rompan si la IP cambia — vea el procedimiento paso a paso en la sección **"Reservar la IP del servidor"** del Capítulo 6.
+5. **Reserve una IP fija para el servidor** dentro de la red local, para que las reglas de firewall configuradas arriba no se rompan si la IP cambia — vea el procedimiento paso a paso en la sección **"Reservar la IP del servidor"** del Capítulo 7.
 
 > (NOTE) Los planes residenciales de Claro y Altice suelen usar **CGNAT** (una capa de traducción de direcciones compartida entre varios clientes), lo que de por sí ya dificulta que alguien desde internet alcance su red doméstica directamente. Esto es una protección adicional útil, **no un sustituto** de configurar bien el equipo — no dependa de ella únicamente.
 
@@ -279,7 +295,7 @@ La mayoría de los equipos que Claro Dominicana y Altice Dominicana entregan a s
 
 Si algún médico o administrador necesita entrar al sistema desde fuera de la clínica (otra sede, su casa), la forma correcta es una **VPN** (por ejemplo WireGuard, o un servicio de VPN empresarial que ofrezca el proveedor de internet) — nunca abrir puertos directamente en el router. Una VPN hace que el dispositivo remoto se comporte como si estuviera físicamente dentro de la red de la clínica, sin exponer el servidor a internet en ningún momento. Configurar una VPN es trabajo de un técnico de red y está fuera del alcance de este manual.
 
-## 9. Operación día a día
+## 10. Operación día a día
 
 ```bash
 # Detener el sistema (los datos se conservan)
@@ -329,11 +345,11 @@ docker exec mc_backend python manage.py import_ars_service_prices --file /app/ap
 
 > (NOTE) Estos dos comandos son una solución de transición. Es probable que en una futura versión del sistema se reemplacen por una **carga masiva por archivo CSV** directamente desde la página Gestionar precios (sin pasar por la terminal) — si esa función ya existe cuando usted lea esto, prefiérala en lugar de estos comandos.
 
-## 10. Respaldos
+## 11. Respaldos
 
 El respaldo y la restauración de datos tienen su propio documento completo: consulte el **Manual de Respaldo** (`manual-respaldo.html`). No se repite aquí para evitar que ambos documentos queden desactualizados entre sí.
 
-## 11. Solución de problemas
+## 12. Solución de problemas
 
 **Un puerto ya está en uso / el sistema no arranca.**
 - Windows: `Get-NetTCPConnection -LocalPort 443`
@@ -360,12 +376,12 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend pyt
 ```
 
 **La IP del servidor cambió y ya nada carga.**
-Actualice `DJANGO_ALLOWED_HOSTS` y `DJANGO_CORS_ALLOWED_ORIGINS` en `.env` con la nueva dirección (Capítulo 6), luego:
+Actualice `DJANGO_ALLOWED_HOSTS` y `DJANGO_CORS_ALLOWED_ORIGINS` en `.env` con la nueva dirección (Capítulo 7), luego:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate backend frontend
 ```
 
-## 12. Anexo — referencia completa de `.env`
+## 13. Anexo — referencia completa de `.env`
 
 | Variable | ¿Secreta? | Propósito |
 |---|---|---|
