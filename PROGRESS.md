@@ -319,7 +319,9 @@ i18n of shared UI chrome; phone validation/formatting; email/birth_date input va
 **2026-08-06 — H-03 follow-through (httpOnly cookie)** — backend `012f2db` · frontend `0882194` · infra `cd7d9c5`
 Refresh token moved out of `localStorage` into an httpOnly, `SameSite=Strict`, path-scoped (`/api/auth/`) cookie, rotated per refresh, cleared on logout. Access token stays in-memory only (`services/api.ts` module state).
 
-**Deferred (recorded, no code changes; see log for full detail):** dev compose exposes `0.0.0.0` with `DEBUG=true` + default creds — bind to loopback before non-local exposure; `react-router-dom@7.18.2` sits in an advisory range but only affects RSC mode (app uses classic `BrowserRouter`) — hold until the React 19.2.7 upgrade; prod TLS cert is self-signed — mount real CA certs before public exposure.
+**2026-09-04 — dev compose bound to loopback** — infra `3c3b9d2` (fixes the "dev compose exposes 0.0.0.0" item below, closed by a 3-agent architecture/software audit this session). `backend`/`frontend` dev port mappings now match `db`/`cache`'s existing `127.0.0.1:PORT:PORT` pattern; LAN exposure moved from default-on to an explicit, gitignored `docker-compose.override.local.yml` opt-in (`docs/docker-management.md` §4).
+
+**Deferred (recorded, no code changes; see log for full detail):** `react-router-dom@7.18.2` sits in an advisory range but only affects RSC mode (app uses classic `BrowserRouter`) — hold until the React 19.2.7 upgrade; prod TLS cert is self-signed — mount real CA certs before public exposure.
 
 ---
 
