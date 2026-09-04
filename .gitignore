@@ -6,6 +6,10 @@
 # local backups (decrypted-at-rest PHI -- never commit)
 backups/
 
+# personal LAN-exposure override (see docs/docker-management.md §4) --
+# never shared, opens dev ports to 0.0.0.0 on purpose for one machine
+docker-compose.override.local.yml
+
 # OS
 Thumbs.db
 .DS_Store
