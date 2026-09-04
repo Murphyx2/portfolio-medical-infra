@@ -1,5 +1,13 @@
 # Dev overlay — auto-loaded by `docker compose up` alongside docker-compose.yml.
 # Hot-reload bind mounts, loopback port bindings, runserver, Vite dev server.
+#
+# All four ports (db/cache/backend/frontend) bind to 127.0.0.1 only, matching
+# each other -- the dev server runs with DEBUG=true and no HTTPS, so it
+# should not be reachable from other machines by default. To open the
+# frontend/backend to your LAN (e.g. to demo on a phone/tablet), don't edit
+# this file -- add a local, gitignored `docker-compose.override.local.yml`
+# re-publishing just the ports you need on 0.0.0.0, and pass
+# `-f docker-compose.yml -f docker-compose.override.yml -f docker-compose.override.local.yml`.
 services:
   db:
     container_name: mc_db
@@ -16,7 +24,7 @@ services:
     volumes:
       - ../backend:/app
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py runserver 0.0.0.0:8000"
@@ -34,5 +42,5 @@ services:
       - ../frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     command: npm run dev -- --host 0.0.0.0
