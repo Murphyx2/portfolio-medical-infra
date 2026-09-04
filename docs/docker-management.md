@@ -77,13 +77,19 @@ Host ports live only in the overlay files, never the base file:
 |----------|-----------------------------------------------|-------------------------------------------|
 | db       | `127.0.0.1:5432:5432` (loopback only)          | not published                             |
 | cache    | `127.0.0.1:6379:6379` (loopback only)          | not published                             |
-| backend  | `8000:8000` (all interfaces)                   | not published (nginx proxies internally)  |
-| frontend | `5173:5173` (all interfaces)                   | `443:443`, `80:80` (all interfaces)       |
+| backend  | `127.0.0.1:8000:8000` (loopback only)          | not published (nginx proxies internally)  |
+| frontend | `127.0.0.1:5173:5173` (loopback only)          | `443:443`, `80:80` (all interfaces)       |
+
+All four dev services bind to loopback only — the dev server runs with
+`DEBUG=true` and no HTTPS, so nothing here is reachable from another machine
+by default. See §4 below for the deliberate, opt-in way to open the
+frontend/backend to your LAN when you actually want that.
 
 A `ports:` entry follows `HOST_IP:HOST_PORT:CONTAINER_PORT` — only the first two
 segments are yours to change without touching application code. `HOST_IP` is
-optional; omitting it (as `backend`/`frontend` do) binds to `0.0.0.0`, i.e. every
-network interface on the host, not just `localhost`.
+optional; omitting it binds to `0.0.0.0`, i.e. every network interface on the
+host, not just `localhost` — that's exactly what §4's LAN override does on
+purpose, and exactly what none of the dev services do by default anymore.
 
 **To change a port:** edit the `ports:` line for that service in the relevant
 compose file, e.g.:
@@ -114,17 +120,34 @@ docker compose up -d --force-recreate backend
 
 ## 4. Exposing the dev frontend to your home network (LAN only)
 
-The dev overlay already publishes the frontend (`5173:5173`) and backend
-(`8000:8000`) with no host-IP prefix, which means Docker already binds them to
-`0.0.0.0` — every interface, not just `localhost`. So the stack is *already*
-reachable from other devices on your LAN today; the only things standing in the
-way are the Windows Firewall and knowing your machine's LAN IP.
+The dev overlay binds the frontend (`127.0.0.1:5173:5173`) and backend
+(`127.0.0.1:8000:8000`) to loopback only by default — nothing here is reachable
+from another device until you deliberately republish the port on `0.0.0.0`.
+Don't edit `docker-compose.override.yml` for this (it's meant to stay
+loopback-only for everyone); add a local, gitignored override file instead:
 
-No code, `.env`, or CORS changes are needed for this. The frontend talks to the
+```yaml
+# docker-compose.override.local.yml (not committed — add it to your local
+# .gitignore or a global excludes file if it isn't already covered)
+services:
+  frontend:
+    ports:
+      - "5173:5173"   # no host-IP prefix -> binds 0.0.0.0
+```
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.override.local.yml up -d
+```
+
+No code, `.env`, or CORS changes are needed beyond that. The frontend talks to the
 backend via a same-origin proxy (`/api`, `/media` in `vite.config.ts`), so a
 browser on another device only ever talks to the Vite dev server directly — the
 backend's `Host` header stays `backend` regardless of what IP you used to reach
-the page.
+the page. (Add the same block for `backend` too, only if you specifically need
+to hit the API directly rather than through the frontend's proxy.)
+
+Once the port is republished on `0.0.0.0`, the remaining steps are the same as
+before:
 
 **Steps:**
 
