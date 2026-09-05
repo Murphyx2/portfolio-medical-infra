@@ -4,9 +4,20 @@
 # TLS via nginx + cert-init, and no public exposure of DB/Redis.
 name: medicalconsultations-prod
 
+# Resource limits below are conservative starting defaults, not a tuned
+# profile -- the target server's real specs aren't known yet (see
+# infra/docs/cicd-deployment-pipeline.md Sec.9). Revisit once they are;
+# these only exist so one runaway container can't starve the others on a
+# single, possibly modest, host. `docker compose up` (outside swarm mode)
+# still honors deploy.resources.limits since Compose v2.
 services:
   db:
     container_name: mc_prod_db
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   cache:
     container_name: mc_prod_cache
@@ -16,6 +27,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   backend:
     container_name: mc_prod_backend
@@ -30,6 +46,11 @@ services:
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   cert-init:
     image: alpine:3.20
@@ -58,6 +79,11 @@ services:
     depends_on:
       - backend
       - cert-init
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
 volumes:
   certs:

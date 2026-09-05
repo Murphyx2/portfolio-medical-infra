@@ -1,5 +1,14 @@
 # Dev overlay — auto-loaded by `docker compose up` alongside docker-compose.yml.
-# Hot-reload bind mounts, loopback port bindings, runserver, Vite dev server.
+# Hot-reload bind mounts, port bindings, runserver, Vite dev server.
+#
+# db/cache/backend bind to 127.0.0.1 only -- db/cache should never be reached
+# beyond loopback, and the backend is meant to be hit through the frontend's
+# same-origin proxy, not directly. `frontend` is the deliberate exception:
+# it's published on 0.0.0.0 on purpose, so the dev UI is reachable from other
+# devices on the same LAN/Wi-Fi (e.g. testing from a phone/tablet) without
+# any extra setup -- see docs/docker-management.md §4 for the firewall step
+# still needed on the host, and its security notes on what this does and
+# doesn't expose.
 services:
   db:
     container_name: mc_db
@@ -16,7 +25,7 @@ services:
     volumes:
       - ../backend:/app
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py runserver 0.0.0.0:8000"

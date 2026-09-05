@@ -3,7 +3,7 @@
 # - POST with 10-digit cedula -> 400
 # - POST with 12-digit cedula -> 400
 # - PATCH with hyphenated cedula -> digits-only stored
-# - IT/CENTER_MANAGER see masked cedula; ADMIN/DOCTOR see full digits
+# - IT sees masked cedula; ADMIN/DOCTOR/CENTER_MANAGER see full digits
 $ErrorActionPreference = "Stop"
 $base = "http://localhost:8000/api"
 $runId = Get-Random -Minimum 100000 -Maximum 999999
@@ -84,7 +84,8 @@ Check "PATCH hyphenated cedula -> 200 digits-only" (($p4.status -eq 200) -and ($
 $p5 = Call "Patch" "$base/patients/$($pat.data.id)/" (Body @{ cedula="000-1111111" }) $adminTok
 Check "PATCH 10-digit cedula -> 400" ($p5.status -eq 400) "status=$($p5.status) detail=$($p5.detail)"
 
-# 7. Masking: IT/CENTER_MANAGER see masked cedula, ADMIN/DOCTOR see full digits
+# 7. Masking: IT sees masked cedula; ADMIN/DOCTOR/CENTER_MANAGER see full
+#    digits (CENTER_MANAGER is admin-equivalent app-wide except Settings edit)
 $it = (Login "it" "Pass123!x").data.access
 $cm = (Login "cm" "Pass123!x").data.access
 $doc = (Login "doctor" "Pass123!x").data.access
@@ -95,7 +96,7 @@ $admCed = $g1.data.cedula
 # Masked value is "01••••20" (8 chars, first 2 + last 2 digits, bullet-masked middle).
 function IsMasked($v) { return ($v -ne "01001084920") -and ($v.Length -eq 8) -and ($v.StartsWith("01")) -and ($v.EndsWith("20")) }
 Check "IT sees masked cedula" (IsMasked $itCed) "got '$itCed'"
-Check "CM sees masked cedula" (IsMasked $cmCed) "got '$cmCed'"
+Check "CM sees full digits-only cedula" ($cmCed -eq "01001084920") "got '$cmCed'"
 Check "DOCTOR sees full digits-only cedula" ($docCed -eq "01001084920") "got '$docCed'"
 Check "ADMIN sees full digits-only cedula" ($admCed -eq "01001084920") "got '$admCed'"
 

@@ -133,7 +133,8 @@ $del = Call "Delete" "$base/patients/$nssPatId/" $null $adm
 Report "cleanup: delete NSS-test patient" ($del.status -eq 204) "status=$($del.status)"
 
 # ---------------------------------------------------------------
-# PHASE 4: Patient-create RBAC (admin/doctor/receptionist=201; nurse/it/cm=403)
+# PHASE 4: Patient-create RBAC (admin/doctor/receptionist/cm=201; nurse/it=403)
+# CENTER_MANAGER is admin-equivalent app-wide except Settings edit.
 # ---------------------------------------------------------------
 Write-Output "=== PHASE 4: Patient create RBAC ==="
 $pBody = @{ first_name="Rbac"; last_name="Patient$stamp"; birth_date="1980-01-01"; gender="MALE"; phone="8095550199"; email="rbac$stamp@example.com" }
@@ -143,7 +144,7 @@ $rw = @(
     @{ role="RECEPTIONIST";exp=201 },
     @{ role="NURSE";       exp=403 },
     @{ role="IT";          exp=403 },
-    @{ role="CENTER_MANAGER"; exp=403 }
+    @{ role="CENTER_MANAGER"; exp=201 }
 )
 $createdIds = @()
 foreach ($t in $rw) {
@@ -162,7 +163,8 @@ foreach ($id in $createdIds) {
 Report "cleanup: delete RBAC-test patients" $cleanAll "deleted=$($createdIds.Count)"
 
 # ---------------------------------------------------------------
-# PHASE 5: PII masking (IT/CM masked; admin/doctor/receptionist/nurse full)
+# PHASE 5: PII masking (IT masked; admin/doctor/receptionist/nurse/cm full)
+# CENTER_MANAGER is admin-equivalent app-wide except Settings edit.
 # ---------------------------------------------------------------
 Write-Output "=== PHASE 5: PII masking ==="
 $maskPat = Call "Post" "$base/patients/" (Body @{ first_name="Pii"; last_name="Check$stamp"; birth_date="1990-05-14"; gender="FEMALE"; phone="8095553131"; email="pii$stamp@example.com"; cedula="00101655332"; nss="98765432101"; address="42 Mask Rd" }) $rec
@@ -170,9 +172,10 @@ $maskPatId = $maskPat.data.id
 $fullExpect = @{ phone="8095553131"; email="pii$stamp@example.com"; first_name="Pii"; last_name="Check$stamp"; cedula="00101655332"; nss="98765432101" }
 
 $maskRows = @(
-    @{ role="IT"; full=$false }, @{ role="CENTER_MANAGER"; full=$false },
+    @{ role="IT"; full=$false },
     @{ role="ADMIN"; full=$true }, @{ role="DOCTOR"; full=$true },
-    @{ role="RECEPTIONIST"; full=$true }, @{ role="NURSE"; full=$true }
+    @{ role="RECEPTIONIST"; full=$true }, @{ role="NURSE"; full=$true },
+    @{ role="CENTER_MANAGER"; full=$true }
 )
 $bullet = [string][char]0x2022
 foreach ($t in $maskRows) {

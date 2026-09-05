@@ -12,9 +12,11 @@ host loss, or a bad boot-time migration destroys all data permanently unless a b
 exists. Since soft-delete means the database only ever grows, there is no "undo" inside
 the running system either — a backup is the only recovery path.
 
-The tooling is two PowerShell scripts in `infra/scripts/`. There's no scheduler wired up
-yet — run `backup_db.ps1` manually, or hook it into Windows Task Scheduler (or cron, if
-this ever moves to a Linux host) if this stack starts holding real data.
+The tooling is three PowerShell scripts in `infra/scripts/`. There's no scheduler wired up
+by default — run `backup_db.ps1` manually, or register it with Windows Task Scheduler (or
+cron, if this ever moves to a Linux host) if this stack starts holding real data.
+`schedule_backup_task.ps1` (run as Administrator) automates the Task Scheduler registration
+in one command instead of the multi-step GUI walkthrough.
 
 ## Creating a backup
 
