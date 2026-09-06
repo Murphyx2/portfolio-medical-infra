@@ -1,0 +1,55 @@
+# Base compose — shared service definitions for dev and prod.
+# Dev: `docker compose up -d` auto-loads docker-compose.override.yml.
+# Prod: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
+name: medicalconsultations
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://cache:6379/0
+    volumes:
+      - media_volume:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  media_volume:
