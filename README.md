@@ -4,6 +4,11 @@ Orchestration, environment templates, documentation, and CI/CD for the
 MedicalConsultations project — a role-based medical consultations management
 system (patients, doctors, centers, records with images, medicines, appointments).
 
+**This is a scoped-down demo branch** of a larger production system —
+insurance/pricing, visit tracking, patient communications, prescriptions, and
+reporting are real, working parts of the full product, just not included
+here. See `backend/README.md` for the full list.
+
 ## Repositories
 
 | Repo     | Contents                                    |
@@ -37,6 +42,9 @@ docker compose up -d --build
 # 4. Create the initial admin user
 docker compose exec backend python manage.py create_admin \
   --username admin --email admin@example.com --password "ChangeMe123!"
+
+# 5. Seed synthetic demo data (patients, records)
+docker compose exec backend python manage.py seed_demo_data --confirm
 ```
 
 Then open:
